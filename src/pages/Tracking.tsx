@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Clock, MapPin, CheckCircle2, AlertCircle, Download, Camera, PackageCheck, MessageSquare, ShieldCheck, Plane, Calendar, Users } from "lucide-react";
+import { Search, Clock, MapPin, CheckCircle2, AlertCircle, Download, Camera, PackageCheck, ShieldCheck, Plane, Calendar } from "lucide-react";
 import { motion } from "motion/react";
 import { Shipment, User } from "../types";
 

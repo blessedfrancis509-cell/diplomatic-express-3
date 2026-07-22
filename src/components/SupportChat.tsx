@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MessageCircle, X, Send, Mail, Phone } from "lucide-react";
+import { MessageCircle, X, Send, Mail } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 interface SupportChatProps {

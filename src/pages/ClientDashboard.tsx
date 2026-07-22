@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User as UserIcon, Package, FileText, LogOut, ChevronRight, Clock, MapPin, Download, Plane } from "lucide-react";
+import { User as UserIcon, Package, FileText, LogOut, ChevronRight, MapPin, Download, Plane } from "lucide-react";
 import { motion } from "motion/react";
 import { User, Shipment } from "../types";
 

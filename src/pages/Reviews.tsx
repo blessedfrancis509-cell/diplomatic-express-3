@@ -1,5 +1,5 @@
 import React from "react";
-import { Star, Quote, User } from "lucide-react";
+import { Star, Quote } from "lucide-react";
 import { motion } from "motion/react";
 
 const reviews = [

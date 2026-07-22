@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MessageSquare, CheckCircle2, Mail, Phone, MapPin, Clock, ShieldCheck, X } from "lucide-react";
+import { MessageSquare, CheckCircle2, Mail, Phone, MapPin, ShieldCheck, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Ticket } from "../types";
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plane, Search, Calendar, MapPin, DollarSign, Users, CheckCircle2, AlertCircle, ChevronRight } from "lucide-react";
+import { Plane, Search, MapPin, CheckCircle2, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Flight, User } from "../types";
 

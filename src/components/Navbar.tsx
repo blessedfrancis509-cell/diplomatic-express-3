@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Menu, X, Globe } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { motion } from "motion/react";
 import { Logo } from "./Logo";
 import { LanguageSelector, MAJOR_LANGUAGES } from "./LanguageSelector";
