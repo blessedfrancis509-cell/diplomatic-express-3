@@ -37,6 +37,8 @@ function makeCabins(basePrice: number, totalSeats: number): FlightCabin[] {
 }
 
 function f(id: number, airline: string, flight_number: string, origin: string, destination: string, hoursFromNow: number, durationHours: number, price: number, seats: number): Flight {
+  const durationMin = Math.round(durationHours * 60);
+  const distanceKm = Math.round(durationHours * 820);
   return {
     id,
     airline,
@@ -48,6 +50,8 @@ function f(id: number, airline: string, flight_number: string, origin: string, d
     price,
     available_seats: seats,
     cabins: makeCabins(price, seats),
+    duration_minutes: durationMin,
+    distance_km: distanceKm,
   };
 }
 

@@ -12,6 +12,7 @@ interface ClientDashboardProps {
 export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboardProps) => {
   const [myShipments, setMyShipments] = useState<Shipment[]>([]);
   const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [cabinFilter, setCabinFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -204,9 +205,41 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
               <div className="flex flex-col items-center justify-center py-10 space-y-4">
                 <div className="w-10 h-10 border-4 border-brand-secondary border-t-transparent rounded-full animate-spin" />
               </div>
-            ) : myBookings.length > 0 ? (
-              <div className="space-y-4">
-                {myBookings.map((booking) => (
+            ) : myBookings.length > 0 ? (() => {
+              const economyCount = myBookings.filter(b => !b.cabin_class || b.cabin_class === "economy").length;
+              const firstCount = myBookings.filter(b => b.cabin_class === "first_class").length;
+              const privateCount = myBookings.filter(b => b.cabin_class === "private_jet").length;
+              const filteredBookings = cabinFilter === "all"
+                ? myBookings
+                : myBookings.filter(b => (b.cabin_class || "economy") === cabinFilter);
+
+              return (
+                <>
+                  {(economyCount + firstCount + privateCount > 0) && (
+                    <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                      {[
+                        { key: "all", label: "All", count: myBookings.length },
+                        { key: "economy", label: "Economy", count: economyCount },
+                        { key: "first_class", label: "First Class", count: firstCount },
+                        { key: "private_jet", label: "Private Jet", count: privateCount },
+                      ].filter(t => t.key === "all" || t.count > 0).map(tab => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setCabinFilter(tab.key)}
+                          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                            cabinFilter === tab.key
+                              ? "bg-brand-primary text-white shadow-lg"
+                              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                          }`}
+                        >
+                          {tab.label} ({tab.count})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    {filteredBookings.map((booking) => (
                   <motion.div 
                     key={booking.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -304,8 +337,11 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
                     </div>
                   </motion.div>
                 ))}
-              </div>
-            ) : (
+                  </div>
+                </>
+              );
+            })()}
+            {!loading && myBookings.length === 0 && (
               <div className="flex flex-col items-center justify-center py-10 text-center space-y-4">
                 <p className="text-slate-400 font-bold">No flight bookings yet</p>
                 <button onClick={() => setActiveTab("flights")} className="btn-primary py-2 px-6 text-xs">Search Flights</button>

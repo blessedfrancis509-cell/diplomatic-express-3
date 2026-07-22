@@ -63,6 +63,8 @@ export interface Flight {
   price: number;
   available_seats: number;
   cabins: FlightCabin[];
+  duration_minutes: number;
+  distance_km: number;
 }
 
 export interface FlightBooking {

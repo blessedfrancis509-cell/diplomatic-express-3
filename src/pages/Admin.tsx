@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, Truck, MessageSquare, X, Camera, LogOut, History, User as UserIcon, FileText, Download, Printer, ShieldCheck, MapPin, ChevronRight, Plane, Plus, Trash2, QrCode, AlertCircle, Check } from "lucide-react";
+import { Package, Truck, MessageSquare, X, Camera, LogOut, History, User as UserIcon, FileText, Download, Printer, ShieldCheck, MapPin, ChevronRight, Plane, Plus, Trash2, QrCode, AlertCircle, Check, Settings } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Shipment, Ticket, User } from "../types";
 
@@ -37,6 +37,10 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
   const [newReply, setNewReply] = useState("");
   const [showLogs, setShowLogs] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [paymentAccount, setPaymentAccount] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("payment_account") || "{}"); } catch { return {}; }
+  });
   const [showReceiptGen, setShowReceiptGen] = useState(false);
   const [receiptData, setReceiptData] = useState({
     type: "package" as "package" | "flight",
@@ -608,6 +612,10 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
           <button onClick={() => setShowLogs(true)} className="btn-outline flex items-center justify-center gap-2 py-2 md:py-3 px-3 md:px-4">
             <History size={16} />
             <span className="text-xs md:text-sm font-bold">Logs</span>
+          </button>
+          <button onClick={() => setShowSettings(true)} className="btn-outline flex items-center justify-center gap-2 py-2 md:py-3 px-3 md:px-4">
+            <Settings size={16} />
+            <span className="text-xs md:text-sm font-bold">Settings</span>
           </button>
           <button onClick={() => setShowReceiptGen(true)} className="btn-outline flex items-center justify-center gap-2 py-2 md:py-3 px-3 md:px-4">
             <FileText size={16} />
@@ -1620,6 +1628,102 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                 ))}
                 {logs.length === 0 && (
                   <div className="text-center py-10 text-slate-400">No activity logged yet.</div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showSettings && (
+          <div 
+            className="fixed inset-0 bg-brand-primary/60 backdrop-blur-md flex items-center justify-center z-[60] p-4"
+            onClick={() => setShowSettings(false)}
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="card w-full max-w-lg max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="text-2xl font-black text-brand-primary tracking-tight">Payment Settings</h3>
+                <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-brand-primary"><X size={28} /></button>
+              </div>
+
+              <div className="space-y-6">
+                <p className="text-sm text-slate-500">Configure the payment account details that will be shown to users when they book flights. Users will see these instructions to complete their payment.</p>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Bank / Payment Provider</label>
+                    <input 
+                      className="input" 
+                      placeholder="e.g. Chase Bank, PayPal, Wise"
+                      value={paymentAccount.bank_name || ""}
+                      onChange={(e) => setPaymentAccount({ ...paymentAccount, bank_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Account Holder Name</label>
+                    <input 
+                      className="input" 
+                      placeholder="e.g. Diplomatic Xpress Logistics"
+                      value={paymentAccount.account_name || ""}
+                      onChange={(e) => setPaymentAccount({ ...paymentAccount, account_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Account Number / IBAN / Wallet</label>
+                    <input 
+                      className="input" 
+                      placeholder="e.g. 1234567890 or IBAN..."
+                      value={paymentAccount.account_number || ""}
+                      onChange={(e) => setPaymentAccount({ ...paymentAccount, account_number: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Routing / Sort Code / SWIFT (Optional)</label>
+                    <input 
+                      className="input" 
+                      placeholder="e.g. CHASUS33"
+                      value={paymentAccount.routing_number || ""}
+                      onChange={(e) => setPaymentAccount({ ...paymentAccount, routing_number: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black uppercase tracking-widest text-slate-400">Payment Reference / Note</label>
+                    <input 
+                      className="input" 
+                      placeholder="e.g. Include booking reference in payment"
+                      value={paymentAccount.payment_note || ""}
+                      onChange={(e) => setPaymentAccount({ ...paymentAccount, payment_note: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => {
+                    localStorage.setItem("payment_account", JSON.stringify(paymentAccount));
+                    alert("Payment settings saved!");
+                  }} 
+                  className="btn-primary w-full py-4 text-lg flex items-center justify-center gap-2"
+                >
+                  <Check size={20} />
+                  Save Payment Settings
+                </button>
+
+                {paymentAccount.bank_name && (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Preview — What users will see:</p>
+                    <div className="space-y-1 text-sm">
+                      <p className="font-bold text-brand-primary">{paymentAccount.bank_name}</p>
+                      <p className="text-slate-500">{paymentAccount.account_name}</p>
+                      <p className="text-slate-500 font-mono">{paymentAccount.account_number}</p>
+                      {paymentAccount.routing_number && <p className="text-slate-400 text-xs">{paymentAccount.routing_number}</p>}
+                      {paymentAccount.payment_note && <p className="text-brand-secondary text-xs italic mt-2">{paymentAccount.payment_note}</p>}
+                    </div>
+                  </div>
                 )}
               </div>
             </motion.div>
