@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User account for authentication and role-based access",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Unique username" },
+        "email": { "type": "string", "format": "email", "description": "User email" },
+        "password": { "type": "string", "description": "Hashed password" },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "User role" }
+      },
+      "required": ["username", "password"]
+    },
+    "Shipment": {
+      "title": "Shipment",
+      "description": "Consignment or shipment details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Tracking ID" },
+        "customer_name": { "type": "string" },
+        "client_phone": { "type": "string" },
+        "client_photo_url": { "type": "string" },
+        "origin": { "type": "string" },
+        "destination": { "type": "string" },
+        "status": { "type": "string" },
+        "claimed_by": { "type": "string" },
+        "payment_methods": { "type": "string", "description": "JSON string of payment methods" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "customer_name", "origin", "destination"]
+    },
+    "ShipmentUpdate": {
+      "title": "ShipmentUpdate",
+      "description": "Update for a shipment's status or location",
+      "type": "object",
+      "properties": {
+        "shipment_id": { "type": "string" },
+        "status": { "type": "string" },
+        "location": { "type": "string" },
+        "photo_url": { "type": "string" },
+        "notes": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["shipment_id", "status"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Customer service ticket",
+      "type": "object",
+      "properties": {
+        "customer_email": { "type": "string", "format": "email" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customer_email", "subject", "message"]
+    },
+    "TicketReply": {
+      "title": "TicketReply",
+      "description": "Reply to a customer service ticket",
+      "type": "object",
+      "properties": {
+        "ticket_id": { "type": "string" },
+        "sender_username": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ticket_id", "sender_username", "message"]
+    },
+    "Flight": {
+      "title": "Flight",
+      "description": "Flight schedule details",
+      "type": "object",
+      "properties": {
+        "airline": { "type": "string" },
+        "flight_number": { "type": "string" },
+        "origin": { "type": "string" },
+        "destination": { "type": "string" },
+        "departure_time": { "type": "string", "format": "date-time" },
+        "arrival_time": { "type": "string", "format": "date-time" },
+        "price": { "type": "number" },
+        "available_seats": { "type": "integer" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["airline", "flight_number", "origin", "destination", "departure_time", "arrival_time", "price"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Log of system activities",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["username", "action"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profiles" },
+    "/shipments/{shipmentId}": { "schema": "Shipment", "description": "Shipment consignments" },
+    "/shipments/{shipmentId}/updates/{updateId}": { "schema": "ShipmentUpdate", "description": "Updates for a shipment" },
+    "/tickets/{ticketId}": { "schema": "Ticket", "description": "Customer service tickets" },
+    "/tickets/{ticketId}/replies/{replyId}": { "schema": "TicketReply", "description": "Replies to a ticket" },
+    "/flights/{flightId}": { "schema": "Flight", "description": "Flight schedules" },
+    "/activity_logs/{logId}": { "schema": "ActivityLog", "description": "System activity logs" }
+  }
+}

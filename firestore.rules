@@ -1,0 +1,158 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: userId
+// Fields:
+//   - username: string (required)
+//   - email: string (optional)
+//   - password: string (required)
+//   - role: string (required, enum: ['user', 'admin'])
+//
+// Collection: shipments
+// Document ID: shipmentId (Tracking ID)
+// Fields:
+//   - id: string (required)
+//   - customer_name: string (required)
+//   - client_phone: string (optional)
+//   - client_photo_url: string (optional)
+//   - origin: string (required)
+//   - destination: string (required)
+//   - status: string (required)
+//   - claimed_by: string (optional)
+//   - payment_methods: string (optional)
+//   - created_at: timestamp (required)
+//
+// Collection: tickets
+// Document ID: ticketId
+// Fields:
+//   - customer_email: string (required)
+//   - subject: string (required)
+//   - message: string (required)
+//   - status: string (required)
+//   - created_at: timestamp (required)
+//
+// Collection: flights
+// Document ID: flightId
+// Fields:
+//   - airline: string (required)
+//   - flight_number: string (required)
+//   - origin: string (required)
+//   - destination: string (required)
+//   - departure_time: timestamp (required)
+//   - arrival_time: timestamp (required)
+//   - price: number (required)
+//   - available_seats: number (required)
+//   - status: string (required)
+//   - created_at: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "pastorjohn046@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['username', 'password', 'role']) &&
+             data.username is string && data.username.size() > 0 &&
+             data.password is string && data.password.size() > 0 &&
+             data.role in ['user', 'admin'];
+    }
+
+    function isValidShipment(data) {
+      return data.keys().hasAll(['id', 'customer_name', 'origin', 'destination', 'status']) &&
+             data.id is string && data.id.size() > 0 &&
+             data.customer_name is string && data.customer_name.size() > 0 &&
+             data.origin is string && data.origin.size() > 0 &&
+             data.destination is string && data.destination.size() > 0 &&
+             data.status is string && data.status.size() > 0;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can read their own profile. Admins can read all profiles.
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Signup: Anyone can create a user, but role must be 'user' unless admin.
+      allow create: if isValidUser(request.resource.data) && 
+                      (request.resource.data.role == 'user' || isAdmin());
+      
+      // Update: Users can update their own profile (but not their role), admins can update any.
+      allow update: if (isOwner(userId) && request.resource.data.role == resource.data.role && isValidUser(request.resource.data)) || 
+                      isAdmin();
+    }
+
+    match /shipments/{shipmentId} {
+      // Public read for tracking (if they know the ID)
+      allow read: if true;
+      
+      // Only admins can create/update/delete shipments
+      allow write: if isAdmin() && isValidShipment(request.resource.data);
+      
+      match /updates/{updateId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+    }
+
+    match /tickets/{ticketId} {
+      // Anyone can create a ticket.
+      allow create: if true;
+      
+      // Admins can read/update all tickets.
+      allow read, update, delete: if isAdmin();
+      
+      // Users can read their own tickets if we had a userId field, but here we use email.
+      // For now, let's allow read if email matches (though this is weak without auth linking).
+      // Better: Admins only for listing, but maybe public read if they have the ID?
+      // Let's stick to admin only for now to be safe.
+      
+      match /replies/{replyId} {
+        allow read: if true;
+        allow write: if isAdmin() || true; // Allow users to reply too
+      }
+    }
+
+    match /flights/{flightId} {
+      allow read: if true;
+      allow write: if isAdmin();
+      
+      match /updates/{updateId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+      
+      match /bookings/{bookingId} {
+        allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == resource.data.userId);
+        allow create: if isAuthenticated();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    match /activity_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

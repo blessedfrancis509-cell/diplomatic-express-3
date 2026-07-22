@@ -1,0 +1,7 @@
+{
+  "name": "Diplomatic Xpress Admin Portal",
+  "description": "Professional logistics management system with secure consignment tracking, flight management, and customer support portal. Powered by a robust SQLite backend.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

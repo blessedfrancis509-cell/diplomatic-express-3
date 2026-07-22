@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-signature: "Dancing Script", cursive;
+  --color-brand-primary: #1e3a8a; /* Blue 900 */
+  --color-brand-secondary: #3b82f6; /* Blue 500 */
+  --color-brand-accent: #60a5fa; /* Blue 400 */
+  --color-brand-bg: #f0f9ff; /* Sky 50 */
+  --background-image-brand-gradient: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+  --background-image-accent-gradient: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+body {
+  @apply bg-brand-bg text-brand-primary font-sans antialiased;
+}
+
+.btn-primary {
+  @apply bg-brand-secondary text-white px-8 py-3 rounded-xl font-bold hover:bg-brand-secondary/90 transition-all shadow-lg shadow-brand-secondary/20 active:scale-95 bg-linear-to-br from-brand-secondary to-rose-400;
+}
+
+.btn-secondary {
+  @apply bg-brand-primary text-white px-8 py-3 rounded-xl font-bold hover:bg-brand-primary/90 transition-all shadow-lg shadow-brand-primary/20 active:scale-95;
+}
+
+.btn-outline {
+  @apply border-2 border-brand-secondary text-brand-secondary px-8 py-3 rounded-xl font-bold hover:bg-brand-secondary hover:text-white transition-all active:scale-95;
+}
+
+.card {
+  @apply bg-white p-8 rounded-2xl shadow-xl shadow-black/5 border border-black/5;
+}
+
+.input {
+  @apply w-full px-5 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-brand-secondary/10 focus:border-brand-secondary transition-all bg-white;
+}
+
+.nav-link {
+  @apply text-slate-600 hover:text-brand-secondary font-medium transition-colors relative py-2;
+}
+
+.nav-link-active {
+  @apply text-brand-secondary;
+}
+
+.nav-link-active::after {
+  content: '';
+  @apply absolute bottom-0 left-0 w-full h-0.5 bg-brand-secondary rounded-full;
+}
+
+/* Google Translate Styles */
+.goog-te-banner-frame.skiptranslate {
+  display: none !important;
+}
+
+#google_translate_element {
+  position: absolute;
+  top: -9999px;
+  left: -9999px;
+  opacity: 0;
+  pointer-events: none;
+  height: 1px;
+  width: 1px;
+  overflow: hidden;
+}
+
+body {
+  top: 0px !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-300;
+}
