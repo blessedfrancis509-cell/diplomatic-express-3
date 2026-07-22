@@ -129,7 +129,16 @@ db.exec(`
     passenger_name TEXT,
     passport_number TEXT,
     cabin_class TEXT DEFAULT 'economy',
-    status TEXT DEFAULT 'Confirmed',
+    payment_status TEXT DEFAULT 'pending',
+    airline TEXT,
+    flight_number TEXT,
+    origin TEXT,
+    destination TEXT,
+    departure_time TEXT,
+    arrival_time TEXT,
+    price REAL,
+    duration_minutes INTEGER,
+    distance_km INTEGER,
     booking_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(flight_id) REFERENCES flights(id)
   );
@@ -142,6 +151,29 @@ db.exec(`
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `);
+
+// Migrate bookings table: add new columns if missing
+const bookingCols = db.prepare("PRAGMA table_info(bookings)").all() as any[];
+const bookingColNames = bookingCols.map((c: any) => c.name);
+const bookingMigrations: [string, string][] = [
+  ["payment_status", "ALTER TABLE bookings ADD COLUMN payment_status TEXT DEFAULT 'pending'"],
+  ["airline", "ALTER TABLE bookings ADD COLUMN airline TEXT"],
+  ["flight_number", "ALTER TABLE bookings ADD COLUMN flight_number TEXT"],
+  ["origin", "ALTER TABLE bookings ADD COLUMN origin TEXT"],
+  ["destination", "ALTER TABLE bookings ADD COLUMN destination TEXT"],
+  ["departure_time", "ALTER TABLE bookings ADD COLUMN departure_time TEXT"],
+  ["arrival_time", "ALTER TABLE bookings ADD COLUMN arrival_time TEXT"],
+  ["price", "ALTER TABLE bookings ADD COLUMN price REAL"],
+  ["duration_minutes", "ALTER TABLE bookings ADD COLUMN duration_minutes INTEGER"],
+  ["distance_km", "ALTER TABLE bookings ADD COLUMN distance_km INTEGER"],
+];
+for (const [col, sql] of bookingMigrations) {
+  if (!bookingColNames.includes(col)) {
+    db.prepare(sql).run();
+  }
+}
+// Migrate old bookings with status 'Confirmed' to payment_status 'confirmed'
+db.prepare("UPDATE bookings SET payment_status = 'confirmed' WHERE status = 'Confirmed' AND payment_status = 'pending'").run();
 
 // Seed default admin
 const seedAdmin = () => {
@@ -192,7 +224,7 @@ app.post("/api/auth/login", (req, res) => {
 
 // Admin verification helper
 const verifyAdmin = (req: express.Request) => {
-  const username = req.body?.admin_user || req.query?.admin_user;
+  const username = req.body?.admin_user || req.query?.admin_user || req.headers['x-admin-user'];
   const adminSecret = req.headers['x-admin-secret'] as string;
   
   console.log(`[Auth] Verifying admin: username=${username}, secret_provided=${!!adminSecret}`);
@@ -229,7 +261,7 @@ const verifyAdmin = (req: express.Request) => {
   }
 
   try {
-    const user = db.prepare("SELECT * FROM users WHERE username = ? AND role = 'admin'").get(username) as any;
+    const user = db.prepare("SELECT * FROM users WHERE username = ? AND role = 'admin'").get(username as string) as any;
     if (!user) {
       console.log(`[Auth] Admin verification failed: User '${username}' not found or not admin in database`);
       return false;
@@ -548,23 +580,25 @@ app.post("/api/flights/:id/updates", (req, res) => {
 });
 
 app.post("/api/flights/:id/book", (req, res) => {
-  const { user_id, passenger_name, passport_number, cabin_class } = req.body;
-  const flight = db.prepare("SELECT * FROM flights WHERE id = ?").get(req.params.id) as any;
-  if (!flight || flight.available_seats <= 0) return res.status(400).json({ error: "Flight not available" });
+  const { user_id, passenger_name, passport_number, cabin_class, airline, flight_number, origin, destination, departure_time, arrival_time, price, duration_minutes, distance_km } = req.body;
 
-  db.transaction(() => {
-    db.prepare("INSERT INTO bookings (flight_id, user_id, passenger_name, passport_number, cabin_class) VALUES (?, ?, ?, ?, ?)").run(req.params.id, user_id, passenger_name, passport_number || null, cabin_class || "economy");
+  const flight = db.prepare("SELECT * FROM flights WHERE id = ?").get(req.params.id) as any;
+  if (flight) {
+    if (flight.available_seats <= 0) return res.status(400).json({ error: "Flight not available" });
     db.prepare("UPDATE flights SET available_seats = available_seats - 1 WHERE id = ?").run(req.params.id);
-  })();
+  }
+
+  db.prepare("INSERT INTO bookings (flight_id, user_id, passenger_name, passport_number, cabin_class, payment_status, airline, flight_number, origin, destination, departure_time, arrival_time, price, duration_minutes, distance_km) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+    req.params.id, user_id, passenger_name, passport_number || null, cabin_class || "economy",
+    airline || null, flight_number || null, origin || null, destination || null,
+    departure_time || null, arrival_time || null, price || 0, duration_minutes || 0, distance_km || 0
+  );
   res.status(201).json({ success: true });
 });
 
 app.get("/api/my-bookings/:userId", (req, res) => {
   const bookings = db.prepare(`
-    SELECT b.*, f.airline, f.flight_number, f.origin, f.destination, f.departure_time, f.price
-    FROM bookings b
-    JOIN flights f ON b.flight_id = f.id
-    WHERE b.user_id = ?
+    SELECT b.* FROM bookings b WHERE b.user_id = ?
   `).all(req.params.userId);
   res.json(bookings);
 });
@@ -572,8 +606,41 @@ app.get("/api/my-bookings/:userId", (req, res) => {
 app.delete("/api/flights/:id", (req, res) => {
   if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
   db.prepare("DELETE FROM flight_updates WHERE flight_id = ?").run(req.params.id);
-  db.prepare("DELETE FROM bookings WHERE flight_id = ?").run(req.params.id);
   db.prepare("DELETE FROM flights WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
+app.get("/api/admin/bookings", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  const bookings = db.prepare("SELECT b.*, u.username FROM bookings b LEFT JOIN users u ON b.user_id = u.id ORDER BY b.booking_date DESC").all();
+  res.json(bookings);
+});
+
+app.patch("/api/admin/bookings/:id/approve", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  const booking = db.prepare("SELECT * FROM bookings WHERE id = ?").get(req.params.id) as any;
+  db.prepare("UPDATE bookings SET payment_status = 'confirmed' WHERE id = ?").run(req.params.id);
+  if (booking) {
+    wss.clients.forEach(client => {
+      if (client.readyState === 1) client.send(JSON.stringify({ type: "BOOKING_APPROVED", data: { ...booking, payment_status: "confirmed" } }));
+    });
+  }
+  const admin_user = req.headers["x-admin-user"] as string;
+  if (admin_user) logAction(admin_user, `Approved booking #${req.params.id}`);
+  res.json({ success: true });
+});
+
+app.patch("/api/admin/bookings/:id/reject", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  const booking = db.prepare("SELECT * FROM bookings WHERE id = ?").get(req.params.id) as any;
+  db.prepare("UPDATE bookings SET payment_status = 'rejected' WHERE id = ?").run(req.params.id);
+  if (booking) {
+    wss.clients.forEach(client => {
+      if (client.readyState === 1) client.send(JSON.stringify({ type: "BOOKING_REJECTED", data: { ...booking, payment_status: "rejected" } }));
+    });
+  }
+  const admin_user = req.headers["x-admin-user"] as string;
+  if (admin_user) logAction(admin_user, `Rejected booking #${req.params.id}`);
   res.json({ success: true });
 });
 
@@ -626,11 +693,10 @@ const cleanupOldData = () => {
     // Clean any orphaned updates (updates whose parent shipment/flight was deleted by admin)
     const orphanedUpdates = db.prepare("DELETE FROM shipment_updates WHERE shipment_id NOT IN (SELECT id FROM shipments)").run();
     const orphanedFlightUpdates = db.prepare("DELETE FROM flight_updates WHERE flight_id NOT IN (SELECT id FROM flights)").run();
-    const orphanedBookings = db.prepare("DELETE FROM bookings WHERE flight_id NOT IN (SELECT id FROM flights)").run();
 
     console.log(`[Maintenance] Cleanup complete.`);
     console.log(`- Old Logs: ${logResult.changes}`);
-    console.log(`- Orphaned Records: ${orphanedUpdates.changes + orphanedFlightUpdates.changes + orphanedBookings.changes}`);
+    console.log(`- Orphaned Records: ${orphanedUpdates.changes + orphanedFlightUpdates.changes}`);
   } catch (err) {
     console.error("[Maintenance] Cleanup error:", err);
   }

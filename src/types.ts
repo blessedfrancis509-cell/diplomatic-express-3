@@ -73,13 +73,17 @@ export interface FlightBooking {
   user_id: number;
   passenger_name: string;
   passport_number?: string;
-  status: string;
-  booking_date: string;
+  cabin_class?: string;
+  payment_status: string;
   airline?: string;
   flight_number?: string;
   origin?: string;
   destination?: string;
   departure_time?: string;
+  arrival_time?: string;
   price?: number;
-  cabin_class?: string;
+  duration_minutes?: number;
+  distance_km?: number;
+  status?: string;
+  booking_date: string;
 }

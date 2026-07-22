@@ -17,6 +17,18 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
 
   useEffect(() => {
     fetchMyData();
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "BOOKING_APPROVED" || msg.type === "BOOKING_REJECTED") {
+        setMyBookings(prev => prev.map(b => b.id === msg.data.id ? { ...b, payment_status: msg.data.payment_status } : b));
+      }
+    };
+
+    const poll = setInterval(fetchMyData, 30000);
+    return () => { ws.close(); clearInterval(poll); };
   }, []);
 
   const fetchMyData = async () => {
@@ -260,8 +272,12 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
                               {booking.cabin_class === "private_jet" ? "Private Jet" : booking.cabin_class === "first_class" ? "First Class" : "Economy"}
                             </span>
                           )}
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-600 rounded-md text-[10px] font-black uppercase tracking-widest">
-                            {booking.status}
+                          <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
+                            booking.payment_status === "confirmed" ? "bg-emerald-100 text-emerald-600" :
+                            booking.payment_status === "rejected" ? "bg-red-100 text-red-600" :
+                            "bg-amber-100 text-amber-600"
+                          }`}>
+                            {booking.payment_status === "confirmed" ? "Confirmed" : booking.payment_status === "rejected" ? "Rejected" : "Pending Payment"}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -280,7 +296,7 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Departure</p>
                           <p className="text-sm font-bold text-brand-primary">{new Date(booking.departure_time).toLocaleDateString()}</p>
                         </div>
-                        {booking.status === "Landed" ? (
+                        {booking.payment_status === "confirmed" ? (
                           <button 
                             onClick={() => {
                               const receiptWindow = window.open('', '_blank');
@@ -330,7 +346,9 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
                             E-Ticket
                           </button>
                         ) : (
-                          <span className="text-[10px] text-slate-300 font-bold italic">E-Ticket after landing</span>
+                          <span className="text-[10px] text-slate-300 font-bold italic">
+                            {booking.payment_status === "pending" ? "Waiting for payment confirmation" : "Booking rejected - contact support"}
+                          </span>
                         )}
                       </div>
                     </div>

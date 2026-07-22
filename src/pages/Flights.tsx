@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plane, Search, MapPin, CheckCircle2, AlertCircle, Crown, Sparkles, Star, X, Copy, CreditCard, Clock, Ruler, Filter } from "lucide-react";
+import { Plane, Search, MapPin, AlertCircle, Crown, Sparkles, Star, X, Copy, CreditCard, Clock, Ruler, Filter, Check, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Flight, FlightCabin, User } from "../types";
 import { DUMMY_FLIGHTS } from "../data/dummyFlights";
@@ -94,14 +94,16 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
   const [selectedCabin, setSelectedCabin] = useState<string>("economy");
   const [cabinFilter, setCabinFilter] = useState<string>("all");
   const [bookingData, setBookingData] = useState({ passenger_name: user?.username || "", passport_number: "" });
-  const [bookingStatus, setBookingStatus] = useState<{ success?: boolean; error?: string } | null>(null);
+  const [bookingStep, setBookingStep] = useState<"form" | "payment" | "processing">("form");
+  const [bookingError, setBookingError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const paymentAccount = JSON.parse(localStorage.getItem("payment_account") || "{}");
 
   const closeModal = useCallback(() => {
     setSelectedFlight(null);
-    setBookingStatus(null);
+    setBookingStep("form");
+    setBookingError(null);
     setSelectedCabin("economy");
     setCopied(false);
   }, []);
@@ -177,7 +179,7 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
   const handleBook = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) { setActiveTab("auth"); return; }
-    if (!selectedFlight) return;
+    if (!selectedFlight || !bookingCabin) return;
 
     try {
       const res = await fetch(`/api/flights/${selectedFlight.id}/book`, {
@@ -188,17 +190,25 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
           passenger_name: bookingData.passenger_name,
           passport_number: bookingData.passport_number,
           cabin_class: selectedCabin,
+          airline: selectedFlight.airline,
+          flight_number: selectedFlight.flight_number,
+          origin: selectedFlight.origin,
+          destination: selectedFlight.destination,
+          departure_time: selectedFlight.departure_time,
+          arrival_time: selectedFlight.arrival_time,
+          price: bookingCabin.price,
+          duration_minutes: selectedFlight.duration_minutes,
+          distance_km: selectedFlight.distance_km,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setBookingStatus({ success: true });
-        fetchFlights();
+        setBookingStep("payment");
       } else {
-        setBookingStatus({ error: data.error });
+        setBookingError(data.error || "Failed to book flight.");
       }
     } catch {
-      setBookingStatus({ error: "Failed to book flight. Please try again." });
+      setBookingError("Failed to book flight. Please try again.");
     }
   };
 
@@ -511,7 +521,7 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
               {/* Sticky Header */}
               <div className="flex items-center justify-between p-4 md:p-6 border-b border-slate-100 shrink-0">
                 <h3 className="text-lg md:text-2xl font-black text-brand-primary tracking-tight">
-                  {bookingStatus?.success ? "Booking Complete" : "Book Flight"}
+                  {bookingStep === "form" ? "Book Flight" : bookingStep === "payment" ? "Complete Payment" : "Processing"}
                 </h3>
                 <button onClick={closeModal} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 transition-all">
                   <X size={20} className="text-slate-500" />
@@ -521,16 +531,133 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
               {/* Scrollable Content */}
               <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 md:space-y-6 overscroll-contain">
 
-                {bookingStatus?.success ? (
-                  /* ===== BOOKING CONFIRMED ===== */
-                  <div className="space-y-6">
-                    <div className="text-center py-6 space-y-4">
-                      <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                        <CheckCircle2 size={40} />
+                {/* ===== STEP 1: BOOKING FORM ===== */}
+                {bookingStep === "form" && (
+                  <>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Flight</span>
+                        <span className="font-bold text-brand-primary text-sm">{selectedFlight.airline} {selectedFlight.flight_number}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Route</span>
+                        <span className="font-bold text-brand-primary text-sm">{selectedFlight.origin} → {selectedFlight.destination}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-black text-brand-primary">
+                            {new Date(selectedFlight.departure_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-500">{new Date(selectedFlight.departure_time).toLocaleDateString()}</p>
+                        </div>
+                        <div className="flex-1 flex flex-col items-center gap-1">
+                          <div className="w-full h-px bg-slate-200 relative">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-50 px-2">
+                              <Plane size={12} className="text-brand-secondary rotate-90" />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-[9px] text-slate-400">
+                            <span className="font-bold">{formatDuration(selectedFlight.duration_minutes)}</span>
+                            <span>·</span>
+                            <span>{formatDistance(selectedFlight.distance_km)}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-black text-brand-primary">
+                            {new Date(selectedFlight.arrival_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-500">{new Date(selectedFlight.arrival_time).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <label className="text-xs font-black uppercase tracking-widest text-slate-400">Select Cabin</label>
+                      <div className="grid grid-cols-3 gap-2 md:gap-3">
+                        {selectedFlight.cabins?.map((cabin) => (
+                          <button
+                            key={cabin.class}
+                            type="button"
+                            onClick={() => setSelectedCabin(cabin.class)}
+                            className={`p-3 md:p-4 rounded-2xl border-2 text-center transition-all ${
+                              selectedCabin === cabin.class
+                                ? `${CABIN_COLORS[cabin.class]} border-current shadow-md`
+                                : "border-slate-200 hover:border-slate-300"
+                            }`}
+                          >
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="flex items-center gap-1">
+                                {CABIN_ICONS[cabin.class]}
+                                <span className="text-[10px] md:text-xs font-black uppercase">{cabin.label}</span>
+                              </span>
+                              <span className="text-base md:text-lg font-black">${cabin.price.toLocaleString()}</span>
+                              <span className="text-[9px] md:text-[10px] font-bold opacity-60">{cabin.available_seats} seats</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {bookingCabin.perks && (
+                      <div className="p-3 md:p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-2 md:mb-3">Included Perks</p>
+                        <div className="flex flex-wrap gap-1.5 md:gap-2">
+                          {bookingCabin.perks.map((perk) => (
+                            <span key={perk} className="flex items-center gap-1 px-2 md:px-3 py-1 bg-white rounded-full text-[10px] md:text-xs font-bold text-slate-600 border border-slate-200">
+                              <Star size={8} className="text-brand-secondary" />
+                              {perk}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center p-4 bg-brand-primary/5 rounded-2xl">
+                      <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Price</span>
+                      <span className="text-2xl md:text-3xl font-black text-brand-secondary">${bookingCabin.price.toLocaleString()}</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-400">Passenger Name</label>
+                        <input
+                          required
+                          className="input text-sm"
+                          placeholder="Full name as on passport"
+                          value={bookingData.passenger_name}
+                          onChange={(e) => setBookingData({ ...bookingData, passenger_name: e.target.value })}
+                        />
                       </div>
                       <div className="space-y-2">
-                        <h4 className="text-xl font-black text-brand-primary">Booking Confirmed!</h4>
-                        <p className="text-sm text-slate-500">Your flight has been booked. Complete payment to issue your ticket.</p>
+                        <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-400">Passport Number (Optional)</label>
+                        <input
+                          className="input text-sm"
+                          placeholder="Passport ID"
+                          value={bookingData.passport_number}
+                          onChange={(e) => setBookingData({ ...bookingData, passport_number: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {bookingError && (
+                      <div className="p-3 md:p-4 bg-red-50 text-red-600 rounded-xl text-xs md:text-sm font-bold flex items-center gap-2">
+                        <AlertCircle size={16} />
+                        {bookingError}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* ===== STEP 2: PAYMENT INSTRUCTIONS ===== */}
+                {bookingStep === "payment" && (
+                  <div className="space-y-6">
+                    <div className="text-center py-4 space-y-3">
+                      <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto">
+                        <CreditCard size={32} />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-lg font-black text-brand-primary">Complete Your Payment</h4>
+                        <p className="text-sm text-slate-500">Transfer the amount below to confirm your booking.</p>
                       </div>
                     </div>
 
@@ -547,22 +674,17 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cabin</span>
                         <span className="font-bold text-brand-primary text-sm">{CABIN_LABELS[selectedCabin]}</span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Departure</span>
-                        <span className="font-bold text-brand-primary text-sm">{new Date(selectedFlight.departure_time).toLocaleString()}</span>
-                      </div>
                       <div className="flex justify-between items-center pt-2 border-t border-slate-200">
                         <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Amount Due</span>
                         <span className="text-2xl font-black text-brand-secondary">${bookingCabin.price.toLocaleString()}</span>
                       </div>
                     </div>
 
-                    {/* Payment Instructions */}
                     {hasPaymentInfo ? (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
                           <CreditCard size={18} className="text-brand-secondary" />
-                          <p className="text-sm font-black text-brand-primary uppercase tracking-wider">Payment Instructions</p>
+                          <p className="text-sm font-black text-brand-primary uppercase tracking-wider">Payment Details</p>
                         </div>
                         <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 space-y-3">
                           <div className="space-y-2 text-sm">
@@ -603,134 +725,68 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
                         <p className="text-sm font-bold text-slate-400">Payment details will be provided by the administrator.</p>
                       </div>
                     )}
-
-                    <p className="text-[10px] text-center text-slate-400 font-bold">After payment, your e-ticket will be available in your dashboard.</p>
                   </div>
-                ) : (
-                  /* ===== BOOKING FORM ===== */
-                  <>
-                    {/* Flight Summary */}
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                )}
+
+                {/* ===== STEP 3: PROCESSING ===== */}
+                {bookingStep === "processing" && (
+                  <div className="space-y-6 py-8">
+                    <div className="text-center space-y-4">
+                      <div className="w-20 h-20 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto">
+                        <Loader2 size={40} className="text-brand-primary animate-spin" />
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="text-xl font-black text-brand-primary">Payment Processing</h4>
+                        <p className="text-sm text-slate-500">Waiting for admin confirmation. Your booking will appear on your dashboard once approved.</p>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-amber-600" />
+                        <p className="text-sm font-black text-amber-700 uppercase tracking-wider">What happens next?</p>
+                      </div>
+                      <ol className="space-y-2 text-sm text-amber-800">
+                        <li className="flex items-start gap-2">
+                          <span className="font-black mt-0.5">1.</span>
+                          <span>Admin will verify your payment</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="font-black mt-0.5">2.</span>
+                          <span>Once confirmed, your flight ticket will appear on your dashboard</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="font-black mt-0.5">3.</span>
+                          <span>You can download your e-ticket after the flight lands</span>
+                        </li>
+                      </ol>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Flight</span>
-                        <span className="font-bold text-brand-primary text-sm">{selectedFlight.airline} {selectedFlight.flight_number}</span>
+                        <span className="font-bold text-brand-primary text-sm">{selectedFlight.flight_number}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Route</span>
                         <span className="font-bold text-brand-primary text-sm">{selectedFlight.origin} → {selectedFlight.destination}</span>
                       </div>
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-black text-brand-primary">
-                            {new Date(selectedFlight.departure_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-500">{new Date(selectedFlight.departure_time).toLocaleDateString()}</p>
-                        </div>
-                        <div className="flex-1 flex flex-col items-center gap-1">
-                          <div className="w-full h-px bg-slate-200 relative">
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-50 px-2">
-                              <Plane size={12} className="text-brand-secondary rotate-90" />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 text-[9px] text-slate-400">
-                            <span className="font-bold">{formatDuration(selectedFlight.duration_minutes)}</span>
-                            <span>·</span>
-                            <span>{formatDistance(selectedFlight.distance_km)}</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-black text-brand-primary">
-                            {new Date(selectedFlight.arrival_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-500">{new Date(selectedFlight.arrival_time).toLocaleDateString()}</p>
-                        </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cabin</span>
+                        <span className="font-bold text-brand-primary text-sm">{CABIN_LABELS[selectedCabin]}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Amount</span>
+                        <span className="font-black text-brand-secondary">${bookingCabin.price.toLocaleString()}</span>
                       </div>
                     </div>
-
-                    {/* Cabin Selection */}
-                    <div className="space-y-3">
-                      <label className="text-xs font-black uppercase tracking-widest text-slate-400">Select Cabin</label>
-                      <div className="grid grid-cols-3 gap-2 md:gap-3">
-                        {selectedFlight.cabins?.map((cabin) => (
-                          <button
-                            key={cabin.class}
-                            type="button"
-                            onClick={() => setSelectedCabin(cabin.class)}
-                            className={`p-3 md:p-4 rounded-2xl border-2 text-center transition-all ${
-                              selectedCabin === cabin.class
-                                ? `${CABIN_COLORS[cabin.class]} border-current shadow-md`
-                                : "border-slate-200 hover:border-slate-300"
-                            }`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <span className="flex items-center gap-1">
-                                {CABIN_ICONS[cabin.class]}
-                                <span className="text-[10px] md:text-xs font-black uppercase">{cabin.label}</span>
-                              </span>
-                              <span className="text-base md:text-lg font-black">${cabin.price.toLocaleString()}</span>
-                              <span className="text-[9px] md:text-[10px] font-bold opacity-60">{cabin.available_seats} seats</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Perks */}
-                    {bookingCabin.perks && (
-                      <div className="p-3 md:p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                        <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-2 md:mb-3">Included Perks</p>
-                        <div className="flex flex-wrap gap-1.5 md:gap-2">
-                          {bookingCabin.perks.map((perk) => (
-                            <span key={perk} className="flex items-center gap-1 px-2 md:px-3 py-1 bg-white rounded-full text-[10px] md:text-xs font-bold text-slate-600 border border-slate-200">
-                              <Star size={8} className="text-brand-secondary" />
-                              {perk}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Total Price */}
-                    <div className="flex justify-between items-center p-4 bg-brand-primary/5 rounded-2xl">
-                      <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Total Price</span>
-                      <span className="text-2xl md:text-3xl font-black text-brand-secondary">${bookingCabin.price.toLocaleString()}</span>
-                    </div>
-
-                    {/* Passenger Info */}
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-400">Passenger Name</label>
-                        <input
-                          required
-                          className="input text-sm"
-                          placeholder="Full name as on passport"
-                          value={bookingData.passenger_name}
-                          onChange={(e) => setBookingData({ ...bookingData, passenger_name: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-400">Passport Number (Optional)</label>
-                        <input
-                          className="input text-sm"
-                          placeholder="Passport ID"
-                          value={bookingData.passport_number}
-                          onChange={(e) => setBookingData({ ...bookingData, passport_number: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    {bookingStatus?.error && (
-                      <div className="p-3 md:p-4 bg-red-50 text-red-600 rounded-xl text-xs md:text-sm font-bold flex items-center gap-2">
-                        <AlertCircle size={16} />
-                        {bookingStatus.error}
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
+
               </div>
 
               {/* Sticky Footer */}
-              {!bookingStatus?.success && (
+              {bookingStep === "form" && (
                 <div className="p-4 md:p-6 border-t border-slate-100 shrink-0">
                   <div className="flex gap-3">
                     <button type="button" onClick={closeModal} className="btn-outline flex-1 py-3 md:py-4 text-sm md:text-base">
@@ -741,12 +797,29 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
                       onClick={handleBook}
                       className="btn-primary flex-1 py-3 md:py-4 text-sm md:text-base"
                     >
-                      Confirm & Pay
+                      Confirm Booking
                     </button>
                   </div>
                 </div>
               )}
-              {bookingStatus?.success && (
+              {bookingStep === "payment" && (
+                <div className="p-4 md:p-6 border-t border-slate-100 shrink-0">
+                  <div className="flex gap-3">
+                    <button type="button" onClick={closeModal} className="btn-outline flex-1 py-3 md:py-4 text-sm md:text-base">
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBookingStep("processing")}
+                      className="btn-primary flex-1 py-3 md:py-4 text-sm md:text-base flex items-center justify-center gap-2"
+                    >
+                      <Check size={18} />
+                      I Have Paid
+                    </button>
+                  </div>
+                </div>
+              )}
+              {bookingStep === "processing" && (
                 <div className="p-4 md:p-6 border-t border-slate-100 shrink-0">
                   <button onClick={closeModal} className="btn-primary w-full py-3 md:py-4 text-sm md:text-base">
                     Done

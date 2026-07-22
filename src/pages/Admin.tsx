@@ -13,8 +13,9 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [flights, setFlights] = useState<any[]>([]);
+  const [adminBookings, setAdminBookings] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
-  const [activeAdminTab, setActiveAdminTab] = useState<"shipments" | "cs" | "flights" | "receipts">("shipments");
+  const [activeAdminTab, setActiveAdminTab] = useState<"shipments" | "cs" | "flights" | "receipts" | "bookings">("shipments");
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingFlight, setIsAddingFlight] = useState(false);
   const [newFlight, setNewFlight] = useState({
@@ -121,6 +122,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
     fetchLogs();
     fetchUsers();
     fetchFlights();
+    fetchAdminBookings();
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
@@ -262,6 +264,44 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
       setFlights(data);
     } catch (err: any) {
       console.error("Fetch flights error:", err);
+    }
+  };
+
+  const fetchAdminBookings = async () => {
+    try {
+      const res = await fetch("/api/admin/bookings", {
+        headers: { "x-admin-user": user.username, "x-admin-secret": adminSecret.trim() },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminBookings(data);
+      }
+    } catch (err) {
+      console.error("Fetch bookings error:", err);
+    }
+  };
+
+  const handleApproveBooking = async (id: number) => {
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}/approve`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-user": user.username, "x-admin-secret": adminSecret.trim() },
+      });
+      if (res.ok) fetchAdminBookings();
+    } catch (err) {
+      console.error("Approve booking error:", err);
+    }
+  };
+
+  const handleRejectBooking = async (id: number) => {
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}/reject`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-admin-user": user.username, "x-admin-secret": adminSecret.trim() },
+      });
+      if (res.ok) fetchAdminBookings();
+    } catch (err) {
+      console.error("Reject booking error:", err);
     }
   };
 
@@ -676,6 +716,14 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
           Receipts
           {activeAdminTab === "receipts" && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 w-full h-1 bg-brand-secondary rounded-full" />}
         </button>
+        <button 
+          onClick={() => { setActiveAdminTab("bookings"); fetchAdminBookings(); }}
+          className={`px-8 py-4 font-black uppercase tracking-widest text-sm transition-all relative flex items-center gap-2 ${activeAdminTab === "bookings" ? "text-brand-secondary" : "text-slate-400 hover:text-brand-primary"}`}
+        >
+          Bookings
+          {adminBookings.some((b: any) => b.payment_status === "pending") && <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />}
+          {activeAdminTab === "bookings" && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 w-full h-1 bg-brand-secondary rounded-full" />}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-10">
@@ -1037,6 +1085,109 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                   Receipts generated through this module are automatically formatted with the company branding and security watermarks. 
                   Always ensure the Tracking ID matches the one in the database for consistency.
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeAdminTab === "bookings" && (
+          <div className="space-y-8">
+            <div className="card">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Plane size={24} className="text-brand-secondary" />
+                  Flight Bookings
+                </h3>
+                <div className="flex items-center gap-4">
+                  <button onClick={fetchAdminBookings} className="p-2 rounded-lg bg-slate-100 text-slate-500 hover:bg-brand-secondary/10 hover:text-brand-secondary transition-all">
+                    <History size={16} />
+                  </button>
+                  <span className="text-xs font-bold bg-slate-100 px-3 py-1 rounded-full text-slate-500">{adminBookings.length} Total</span>
+                </div>
+              </div>
+
+              {adminBookings.filter((b: any) => b.payment_status === "pending").length > 0 && (
+                <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-200">
+                  <p className="text-sm font-black text-amber-700 uppercase tracking-wider mb-1">Pending Approvals</p>
+                  <p className="text-xs text-amber-600">{adminBookings.filter((b: any) => b.payment_status === "pending").length} booking(s) waiting for payment confirmation.</p>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400 text-xs uppercase tracking-widest">
+                      <th className="pb-4 font-bold">ID</th>
+                      <th className="pb-4 font-bold">Passenger</th>
+                      <th className="pb-4 font-bold">Flight</th>
+                      <th className="pb-4 font-bold">Route</th>
+                      <th className="pb-4 font-bold">Cabin</th>
+                      <th className="pb-4 font-bold">Amount</th>
+                      <th className="pb-4 font-bold">Payment</th>
+                      <th className="pb-4 font-bold text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {adminBookings.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-10 text-center text-slate-400 font-bold">No bookings yet</td>
+                      </tr>
+                    ) : (
+                      adminBookings.map((booking: any) => (
+                        <tr key={booking.id} className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 font-mono font-black text-brand-secondary">#{booking.id}</td>
+                          <td className="py-4">
+                            <p className="font-bold text-sm text-brand-primary">{booking.passenger_name}</p>
+                            {booking.username && <p className="text-[10px] text-slate-400">@{booking.username}</p>}
+                          </td>
+                          <td className="py-4 font-bold text-sm">{booking.flight_number}</td>
+                          <td className="py-4 text-sm text-slate-600">{booking.origin} → {booking.destination}</td>
+                          <td className="py-4">
+                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${
+                              booking.cabin_class === "private_jet" ? "bg-purple-100 text-purple-700" :
+                              booking.cabin_class === "first_class" ? "bg-amber-100 text-amber-700" :
+                              "bg-blue-100 text-blue-700"
+                            }`}>
+                              {booking.cabin_class === "private_jet" ? "Private Jet" : booking.cabin_class === "first_class" ? "First Class" : "Economy"}
+                            </span>
+                          </td>
+                          <td className="py-4 font-black text-sm text-brand-secondary">${booking.price?.toLocaleString()}</td>
+                          <td className="py-4">
+                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${
+                              booking.payment_status === "confirmed" ? "bg-emerald-100 text-emerald-600" :
+                              booking.payment_status === "rejected" ? "bg-red-100 text-red-600" :
+                              "bg-amber-100 text-amber-600"
+                            }`}>
+                              {booking.payment_status === "confirmed" ? "Confirmed" : booking.payment_status === "rejected" ? "Rejected" : "Pending"}
+                            </span>
+                          </td>
+                          <td className="py-4 text-right">
+                            {booking.payment_status === "pending" ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => handleApproveBooking(booking.id)}
+                                  className="px-3 py-1.5 bg-emerald-500 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-all flex items-center gap-1"
+                                >
+                                  <Check size={12} />
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleRejectBooking(booking.id)}
+                                  className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg hover:bg-red-600 transition-all flex items-center gap-1"
+                                >
+                                  <X size={12} />
+                                  Reject
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400 font-bold">{booking.payment_status === "confirmed" ? "Approved" : "Rejected"}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
