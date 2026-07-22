@@ -686,7 +686,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
         </div>
       </div>
 
-      <div className="flex border-b border-slate-100 mb-8">
+      <div className="flex border-b border-slate-100 mb-8 overflow-x-auto scrollbar-hide -mx-4 md:mx-0 px-4 md:px-0">
         <button 
           onClick={() => setActiveAdminTab("shipments")}
           className={`px-8 py-4 font-black uppercase tracking-widest text-sm transition-all relative ${activeAdminTab === "shipments" ? "text-brand-secondary" : "text-slate-400 hover:text-brand-primary"}`}
@@ -1707,45 +1707,67 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
 
         {showUsers && (
           <div 
-            className="fixed inset-0 bg-brand-primary/60 backdrop-blur-md flex items-center justify-center z-[60] p-4"
+            className="fixed inset-0 bg-brand-primary/60 backdrop-blur-md flex items-end md:items-center justify-center z-[60] p-0 md:p-4"
             onClick={() => setShowUsers(false)}
           >
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="card w-full max-w-2xl"
+              className="bg-white md:bg-white w-full md:max-w-2xl md:rounded-[2rem] rounded-t-[2rem] max-h-[85vh] flex flex-col shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-2xl font-black text-brand-primary tracking-tight">Registered Users</h3>
-                <button onClick={() => setShowUsers(false)} className="text-slate-400 hover:text-brand-primary"><X size={28} /></button>
+              <div className="flex justify-between items-center p-4 md:p-6 border-b border-slate-100 shrink-0">
+                <h3 className="text-xl md:text-2xl font-black text-brand-primary tracking-tight">Registered Users ({users.length})</h3>
+                <button onClick={() => setShowUsers(false)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 transition-all"><X size={20} className="text-slate-500" /></button>
               </div>
-              <div className="overflow-x-auto max-h-[60vh]">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-slate-400 text-xs uppercase tracking-widest">
-                      <th className="pb-4 font-bold">Username</th>
-                      <th className="pb-4 font-bold">Email</th>
-                      <th className="pb-4 font-bold">Role</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {users.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-4 font-bold text-brand-primary">{u.username}</td>
-                        <td className="py-4 text-slate-500">{u.email}</td>
-                        <td className="py-4">
-                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                            u.role === 'admin' ? 'bg-brand-secondary/10 text-brand-secondary' : 'bg-slate-100 text-slate-500'
-                          }`}>
-                            {u.role}
-                          </span>
-                        </td>
+              <div className="flex-1 overflow-y-auto p-4 md:p-6">
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 text-xs uppercase tracking-widest">
+                        <th className="pb-4 font-bold">Username</th>
+                        <th className="pb-4 font-bold">Email</th>
+                        <th className="pb-4 font-bold">Role</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {users.map((u) => (
+                        <tr key={u.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="py-4 font-bold text-brand-primary">{u.username}</td>
+                          <td className="py-4 text-slate-500">{u.email}</td>
+                          <td className="py-4">
+                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                              u.role === 'admin' ? 'bg-brand-secondary/10 text-brand-secondary' : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              {u.role}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Mobile Cards */}
+                <div className="md:hidden space-y-3">
+                  {users.map((u) => (
+                    <div key={u.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-black text-brand-primary text-sm">{u.username}</span>
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
+                          u.role === 'admin' ? 'bg-brand-secondary/10 text-brand-secondary' : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 font-bold truncate">{u.email}</p>
+                    </div>
+                  ))}
+                </div>
+                {users.length === 0 && (
+                  <div className="text-center py-10 text-slate-400 font-bold">No users registered yet.</div>
+                )}
               </div>
             </motion.div>
           </div>

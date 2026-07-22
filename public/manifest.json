@@ -1,0 +1,21 @@
+{
+  "name": "Diplomatic Xpress Logistics",
+  "short_name": "DiploXpress",
+  "description": "Global consignment tracking, flight booking, and logistics services",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "en"
+}
