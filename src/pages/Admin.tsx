@@ -39,9 +39,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
   const [showLogs, setShowLogs] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [paymentAccount, setPaymentAccount] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("payment_account") || "{}"); } catch { return {}; }
-  });
+  const [paymentAccount, setPaymentAccount] = useState<any>({});
   const [showReceiptGen, setShowReceiptGen] = useState(false);
   const [receiptData, setReceiptData] = useState({
     type: "package" as "package" | "flight",
@@ -123,6 +121,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
     fetchUsers();
     fetchFlights();
     fetchAdminBookings();
+    fetchPaymentAccount();
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
@@ -278,6 +277,15 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
       }
     } catch (err) {
       console.error("Fetch bookings error:", err);
+    }
+  };
+
+  const fetchPaymentAccount = async () => {
+    try {
+      const res = await fetch("/api/settings/payment-account");
+      if (res.ok) setPaymentAccount(await res.json());
+    } catch (err) {
+      console.error("Fetch payment account error:", err);
     }
   };
 
@@ -1875,16 +1883,42 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                   </div>
                 </div>
 
+                <div className="flex gap-3">
                 <button 
-                  onClick={() => {
-                    localStorage.setItem("payment_account", JSON.stringify(paymentAccount));
-                    alert("Payment settings saved!");
+                  onClick={async () => {
+                    try {
+                      const res = await fetch("/api/settings/payment-account", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json", "x-admin-user": user.username, "x-admin-secret": adminSecret.trim() },
+                        body: JSON.stringify(paymentAccount),
+                      });
+                      if (res.ok) alert("Payment settings saved!");
+                    } catch { alert("Failed to save."); }
                   }} 
-                  className="btn-primary w-full py-4 text-lg flex items-center justify-center gap-2"
+                  className="btn-primary flex-1 py-4 text-lg flex items-center justify-center gap-2"
                 >
                   <Check size={20} />
                   Save Payment Settings
                 </button>
+                {paymentAccount.bank_name && (
+                  <button 
+                    onClick={async () => {
+                      if (!confirm("Remove all payment details? Users will no longer see payment instructions.")) return;
+                      try {
+                        const res = await fetch("/api/settings/payment-account", {
+                          method: "DELETE",
+                          headers: { "x-admin-user": user.username, "x-admin-secret": adminSecret.trim() },
+                        });
+                        if (res.ok) { setPaymentAccount({}); alert("Payment details removed."); }
+                      } catch { alert("Failed to remove."); }
+                    }}
+                    className="btn-outline py-4 px-6 text-red-500 hover:bg-red-50 border-red-200 flex items-center justify-center gap-2"
+                  >
+                    <Trash2 size={18} />
+                    Remove
+                  </button>
+                )}
+                </div>
 
                 {paymentAccount.bank_name && (
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">

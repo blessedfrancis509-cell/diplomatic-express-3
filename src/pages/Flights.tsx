@@ -97,8 +97,7 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
   const [bookingStep, setBookingStep] = useState<"form" | "payment" | "processing">("form");
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-
-  const paymentAccount = JSON.parse(localStorage.getItem("payment_account") || "{}");
+  const [paymentAccount, setPaymentAccount] = useState<any>({});
 
   const closeModal = useCallback(() => {
     setSelectedFlight(null);
@@ -118,6 +117,7 @@ export const Flights = ({ user, setActiveTab }: FlightsProps) => {
 
   useEffect(() => {
     fetchFlights();
+    fetch("/api/settings/payment-account").then(r => r.json()).then(setPaymentAccount).catch(() => {});
   }, []);
 
   const fetchFlights = async () => {

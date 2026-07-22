@@ -150,6 +150,12 @@ db.exec(`
     details TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migrate bookings table: add new columns if missing
@@ -647,6 +653,28 @@ app.patch("/api/admin/bookings/:id/reject", (req, res) => {
 app.get("/api/admin/setup-check", (req, res) => {
   if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
   res.json({ firebase_active: false, sqlite_active: true, message: "Using SQLite for data persistence." });
+});
+
+app.get("/api/settings/payment-account", (_req, res) => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'payment_account'").get() as any;
+  res.json(row ? JSON.parse(row.value) : {});
+});
+
+app.put("/api/settings/payment-account", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  const value = JSON.stringify(req.body);
+  db.prepare("INSERT INTO settings (key, value, updated_at) VALUES ('payment_account', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").run(value);
+  const admin_user = req.headers["x-admin-user"] as string;
+  if (admin_user) logAction(admin_user, "Updated payment account settings");
+  res.json({ success: true });
+});
+
+app.delete("/api/settings/payment-account", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  db.prepare("DELETE FROM settings WHERE key = 'payment_account'").run();
+  const admin_user = req.headers["x-admin-user"] as string;
+  if (admin_user) logAction(admin_user, "Removed payment account settings");
+  res.json({ success: true });
 });
 
 app.post("/api/shipments/:id/claim", (req, res) => {
