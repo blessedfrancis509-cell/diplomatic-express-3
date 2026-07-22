@@ -219,6 +219,15 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
                           <span className="text-xs font-black text-brand-secondary uppercase tracking-widest bg-white px-3 py-1 rounded-lg border border-slate-200">
                             {booking.flight_number}
                           </span>
+                          {booking.cabin_class && (
+                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${
+                              booking.cabin_class === "private_jet" ? "bg-purple-100 text-purple-700" :
+                              booking.cabin_class === "first_class" ? "bg-amber-100 text-amber-700" :
+                              "bg-blue-100 text-blue-700"
+                            }`}>
+                              {booking.cabin_class === "private_jet" ? "Private Jet" : booking.cabin_class === "first_class" ? "First Class" : "Economy"}
+                            </span>
+                          )}
                           <span className="px-2 py-1 bg-emerald-100 text-emerald-600 rounded-md text-[10px] font-black uppercase tracking-widest">
                             {booking.status}
                           </span>
@@ -271,6 +280,7 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
                                     </div>
                                     <div class="grid">
                                       <div class="section"><div class="label">Passenger</div><div class="value">${booking.passenger_name}</div></div>
+                                      <div class="section"><div class="label">Cabin Class</div><div class="value">${booking.cabin_class === "private_jet" ? "Private Jet" : booking.cabin_class === "first_class" ? "First Class" : "Economy"}</div></div>
                                       <div class="section"><div class="label">Status</div><div class="value" style="color:#059669;">${booking.status}</div></div>
                                       <div class="section"><div class="label">Departure</div><div class="value">${new Date(booking.departure_time).toLocaleString()}</div></div>
                                       <div class="section"><div class="label">Price Paid</div><div class="value">$${booking.price}</div></div>

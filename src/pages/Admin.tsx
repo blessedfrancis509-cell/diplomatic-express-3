@@ -914,7 +914,15 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                           </span>
                         </td>
                         <td className="py-5">
-                          <p className="font-black text-brand-primary">${f.price}</p>
+                          <div className="space-y-1">
+                            {f.cabins ? f.cabins.map((c: any) => (
+                              <p key={c.class} className="text-xs font-bold text-slate-500">
+                                <span className="uppercase text-[10px]">{c.label}:</span> <span className="text-brand-primary">${c.price.toLocaleString()}</span>
+                              </p>
+                            )) : (
+                              <p className="font-black text-brand-primary">${f.price}</p>
+                            )}
+                          </div>
                         </td>
                         <td className="py-5">
                           <p className="text-sm font-bold text-slate-500">{f.available_seats} left</p>

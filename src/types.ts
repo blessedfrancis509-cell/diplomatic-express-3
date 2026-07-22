@@ -44,6 +44,14 @@ export interface User {
   role: string;
 }
 
+export interface FlightCabin {
+  class: "economy" | "first_class" | "private_jet";
+  label: string;
+  price: number;
+  available_seats: number;
+  perks: string[];
+}
+
 export interface Flight {
   id: number;
   airline: string;
@@ -54,6 +62,7 @@ export interface Flight {
   arrival_time: string;
   price: number;
   available_seats: number;
+  cabins: FlightCabin[];
 }
 
 export interface FlightBooking {
@@ -70,4 +79,5 @@ export interface FlightBooking {
   destination?: string;
   departure_time?: string;
   price?: number;
+  cabin_class?: string;
 }

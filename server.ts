@@ -128,6 +128,7 @@ db.exec(`
     user_id INTEGER,
     passenger_name TEXT,
     passport_number TEXT,
+    cabin_class TEXT DEFAULT 'economy',
     status TEXT DEFAULT 'Confirmed',
     booking_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(flight_id) REFERENCES flights(id)
@@ -547,12 +548,12 @@ app.post("/api/flights/:id/updates", (req, res) => {
 });
 
 app.post("/api/flights/:id/book", (req, res) => {
-  const { user_id, passenger_name, passport_number } = req.body;
+  const { user_id, passenger_name, passport_number, cabin_class } = req.body;
   const flight = db.prepare("SELECT * FROM flights WHERE id = ?").get(req.params.id) as any;
   if (!flight || flight.available_seats <= 0) return res.status(400).json({ error: "Flight not available" });
 
   db.transaction(() => {
-    db.prepare("INSERT INTO bookings (flight_id, user_id, passenger_name, passport_number) VALUES (?, ?, ?, ?)").run(req.params.id, user_id, passenger_name, passport_number || null);
+    db.prepare("INSERT INTO bookings (flight_id, user_id, passenger_name, passport_number, cabin_class) VALUES (?, ?, ?, ?, ?)").run(req.params.id, user_id, passenger_name, passport_number || null, cabin_class || "economy");
     db.prepare("UPDATE flights SET available_seats = available_seats - 1 WHERE id = ?").run(req.params.id);
   })();
   res.status(201).json({ success: true });
