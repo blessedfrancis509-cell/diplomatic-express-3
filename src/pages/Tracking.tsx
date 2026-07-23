@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, Clock, MapPin, CheckCircle2, AlertCircle, Download, Camera, PackageCheck, ShieldCheck, Plane, Calendar } from "lucide-react";
+import { Search, Clock, MapPin, CheckCircle2, AlertCircle, Download, Camera, PackageCheck, ShieldCheck, Plane, Calendar, Upload } from "lucide-react";
 import { motion } from "motion/react";
 import { Shipment, User } from "../types";
 
@@ -25,6 +25,9 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkIds, setBulkIds] = useState("");
   const [bulkResults, setBulkResults] = useState<{ id: string; status: string; found: boolean; shipment?: Shipment }[]>([]);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [proofMessage, setProofMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,6 +123,37 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
       }
     } catch (err) {
       setClaimStatus({ error: "Failed to claim shipment. Please try again." });
+    }
+  };
+
+  const handleUploadProof = async () => {
+    if (!proofFile || !shipment) return;
+    setUploadingProof(true);
+    setProofMessage(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("proof", proofFile);
+      formData.append("username", user?.username || "anonymous");
+
+      const res = await fetch(`/api/shipments/${shipment.id}/payment-proof`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const updatedShipment = { ...shipment, payment_proof_url: data.proof_url, payment_confirmed: 0 };
+        setShipment(updatedShipment);
+        localStorage.setItem("last_shipment", JSON.stringify(updatedShipment));
+        setProofMessage({ type: "success", text: "Payment proof uploaded successfully! Awaiting admin confirmation." });
+        setProofFile(null);
+      } else {
+        setProofMessage({ type: "error", text: data.error || "Failed to upload proof." });
+      }
+    } catch (err) {
+      setProofMessage({ type: "error", text: "Upload failed. Please try again." });
+    } finally {
+      setUploadingProof(false);
     }
   };
 
@@ -452,6 +486,10 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
                   <PackageCheck size={18} />
                   Claimed
                 </div>
+              ) : shipment.status === "Customs" && shipment.payment_confirmed !== 1 ? (
+                <div className="flex items-center justify-center gap-2 text-amber-600 font-bold text-xs bg-amber-50 px-4 py-2 rounded-xl border border-amber-100 text-center leading-tight">
+                  Complete customs payment to claim
+                </div>
               ) : (
                 <button 
                   onClick={handleClaim}
@@ -578,7 +616,7 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
             </div>
           )}
 
-          {shipment.status === "Customs" && shipment.payment_methods && (
+          {shipment.status === "Customs" && (
             <div className="card bg-indigo-50 border-indigo-100 space-y-6">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
@@ -586,29 +624,122 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
                 </div>
                 <div>
                   <h4 className="text-xl font-black text-indigo-900 tracking-tight">Customs Clearance Required</h4>
-                  <p className="text-indigo-600 font-bold text-sm uppercase tracking-widest">Payment Methods for Processing</p>
+                  <p className="text-indigo-600 font-bold text-sm uppercase tracking-widest">Payment for Processing</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {JSON.parse(shipment.payment_methods).map((pm: any, idx: number) => (
-                  <div key={idx} className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-sm flex justify-between items-center group hover:border-indigo-300 transition-all">
-                    <div>
-                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{pm.name}</p>
-                      <p className="font-mono font-bold text-indigo-900 break-all">{pm.details}</p>
+
+              {shipment.customs_amount && (
+                <div className="bg-white p-6 rounded-2xl border-2 border-indigo-200 shadow-sm text-center">
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2">Amount Due</p>
+                  <p className="text-4xl font-black text-indigo-900">
+                    {shipment.customs_currency || "USD"} {Number(shipment.customs_amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              )}
+
+              {shipment.payment_methods && (() => {
+                try {
+                  const methods = JSON.parse(shipment.payment_methods);
+                  if (!methods || methods.length === 0) return null;
+                  return (
+                    <div className="space-y-4">
+                      <h5 className="text-xs font-black text-indigo-700 uppercase tracking-widest">Payment Methods</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {methods.map((pm: any, idx: number) => (
+                          <div key={idx} className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-sm flex justify-between items-center group hover:border-indigo-300 transition-all">
+                            <div>
+                              <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">{pm.name}</p>
+                              <p className="font-mono font-bold text-indigo-900 break-all">{pm.details}</p>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(pm.details);
+                                alert("Address copied to clipboard!");
+                              }}
+                              className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all"
+                            >
+                              <Download size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(pm.details);
-                        alert("Address copied to clipboard!");
-                      }}
-                      className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all"
+                  );
+                } catch {
+                  return null;
+                }
+              })()}
+
+              {proofMessage && (
+                <div className={`p-4 rounded-xl border text-sm font-bold text-center ${proofMessage.type === "success" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-red-50 text-red-600 border-red-100"}`}>
+                  {proofMessage.text}
+                </div>
+              )}
+
+              {shipment.payment_proof_url && shipment.payment_confirmed === 1 ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center space-y-3">
+                  <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center text-white mx-auto shadow-lg">
+                    <CheckCircle2 size={28} />
+                  </div>
+                  <p className="text-lg font-black text-emerald-800">Payment Confirmed</p>
+                  <p className="text-sm text-emerald-600 font-medium">Your customs payment has been verified. Your goods are cleared for delivery.</p>
+                </div>
+              ) : shipment.payment_proof_url ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 space-y-4">
+                  <div className="text-center space-y-2">
+                    <div className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center text-white mx-auto shadow-lg animate-pulse">
+                      <Clock size={28} />
+                    </div>
+                    <p className="text-lg font-black text-amber-800">Awaiting Payment Confirmation</p>
+                    <p className="text-sm text-amber-600 font-medium">Your proof of payment has been submitted. Admin will review and confirm shortly.</p>
+                  </div>
+                  {shipment.payment_proof_url && (
+                    <div className="text-center">
+                      <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2">Your Uploaded Proof</p>
+                      <img src={shipment.payment_proof_url} alt="Payment Proof" className="rounded-xl border border-amber-200 max-w-xs mx-auto shadow-md" referrerPolicy="no-referrer" />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest text-center">Upload Different Proof</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                        className="flex-1 text-xs font-bold text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200"
+                      />
+                      <button
+                        onClick={handleUploadProof}
+                        disabled={!proofFile || uploadingProof}
+                        className="btn-primary py-2 px-4 text-xs flex items-center gap-1 disabled:opacity-50"
+                      >
+                        {uploadingProof ? <Clock className="animate-spin" size={14} /> : <Upload size={14} />}
+                        Re-upload
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-xs text-indigo-500 italic text-center">Upload proof of payment (receipt or screenshot) to proceed with customs clearance.</p>
+                  <div className="flex gap-3">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => setProofFile(e.target.files?.[0] || null)}
+                      className="flex-1 text-sm font-bold text-slate-500 file:mr-4 file:py-3 file:px-5 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200"
+                    />
+                    <button
+                      onClick={handleUploadProof}
+                      disabled={!proofFile || uploadingProof}
+                      className="btn-primary py-3 px-6 text-sm flex items-center gap-2 disabled:opacity-50 whitespace-nowrap"
                     >
-                      <Download size={16} />
+                      {uploadingProof ? <Clock className="animate-spin" size={18} /> : <Upload size={18} />}
+                      Upload Proof
                     </button>
                   </div>
-                ))}
-              </div>
-              <p className="text-xs text-indigo-500 italic">Please complete payment to one of the addresses above to proceed with customs clearance. Once paid, notify your agent.</p>
+                </div>
+              )}
             </div>
           )}
 

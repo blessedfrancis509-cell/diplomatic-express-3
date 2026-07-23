@@ -158,6 +158,21 @@ db.exec(`
   );
 `);
 
+// Migrate shipments table: add customs payment columns if missing
+const shipmentCols = db.prepare("PRAGMA table_info(shipments)").all() as any[];
+const shipmentColNames = shipmentCols.map((c: any) => c.name);
+const shipmentMigrations: [string, string][] = [
+  ["customs_amount", "ALTER TABLE shipments ADD COLUMN customs_amount TEXT"],
+  ["customs_currency", "ALTER TABLE shipments ADD COLUMN customs_currency TEXT"],
+  ["payment_proof_url", "ALTER TABLE shipments ADD COLUMN payment_proof_url TEXT"],
+  ["payment_confirmed", "ALTER TABLE shipments ADD COLUMN payment_confirmed INTEGER DEFAULT 0"],
+];
+for (const [col, sql] of shipmentMigrations) {
+  if (!shipmentColNames.includes(col)) {
+    db.prepare(sql).run();
+  }
+}
+
 // Migrate bookings table: add new columns if missing
 const bookingCols = db.prepare("PRAGMA table_info(bookings)").all() as any[];
 const bookingColNames = bookingCols.map((c: any) => c.name);
@@ -180,6 +195,13 @@ for (const [col, sql] of bookingMigrations) {
 }
 // Migrate old bookings with status 'Confirmed' to payment_status 'confirmed'
 db.prepare("UPDATE bookings SET payment_status = 'confirmed' WHERE status = 'Confirmed' AND payment_status = 'pending'").run();
+
+// Migrate ticket_replies table: add image_url column if missing
+const replyCols = db.prepare("PRAGMA table_info(ticket_replies)").all() as any[];
+const replyColNames = replyCols.map((c: any) => c.name);
+if (!replyColNames.includes("image_url")) {
+  db.prepare("ALTER TABLE ticket_replies ADD COLUMN image_url TEXT").run();
+}
 
 // Seed default admin
 const seedAdmin = () => {
@@ -442,7 +464,7 @@ app.post("/api/shipments/:id/updates", upload.single("photo"), (req, res) => {
     console.log(`POST /api/shipments/${req.params.id}/updates - Admin verification failed`);
     return res.status(403).json({ error: "Unauthorized" });
   }
-  const { status, location, notes, admin_user, payment_methods } = req.body;
+  const { status, location, notes, admin_user, payment_methods, customs_amount, customs_currency } = req.body;
 
   const photo_url = req.file ? (req.file as any).path || `/uploads/${req.file.filename}` : null;
   
@@ -454,10 +476,18 @@ app.post("/api/shipments/:id/updates", upload.single("photo"), (req, res) => {
     `).run(req.params.id, status, location || null, photo_url, notes || null);
 
     let updateSql = "UPDATE shipments SET status = ?";
-    const params = [status];
+    const params: any[] = [status];
     if (payment_methods) {
       updateSql += ", payment_methods = ?";
       params.push(payment_methods);
+    }
+    if (customs_amount !== undefined && customs_amount !== null && customs_amount !== "") {
+      updateSql += ", customs_amount = ?";
+      params.push(customs_amount);
+    }
+    if (customs_currency !== undefined && customs_currency !== null && customs_currency !== "") {
+      updateSql += ", customs_currency = ?";
+      params.push(customs_currency);
     }
     updateSql += " WHERE id = ?";
     params.push(req.params.id);
@@ -520,16 +550,18 @@ app.get("/api/tickets/:id/replies", (req, res) => {
   res.json(db.prepare("SELECT * FROM ticket_replies WHERE ticket_id = ? ORDER BY timestamp ASC").all(req.params.id));
 });
 
-app.post("/api/tickets/:id/replies", (req, res) => {
+app.post("/api/tickets/:id/replies", upload.single("image"), (req, res) => {
   const { sender_username, message } = req.body;
-  db.prepare("INSERT INTO ticket_replies (ticket_id, sender_username, message) VALUES (?, ?, ?)").run(req.params.id, sender_username, message);
+  const image_url = req.file ? (req.file as any).path || `/uploads/${req.file.filename}` : null;
+  db.prepare("INSERT INTO ticket_replies (ticket_id, sender_username, message, image_url) VALUES (?, ?, ?, ?)").run(req.params.id, sender_username, message || null, image_url);
 
   // Broadcast ticket reply via WebSocket
+  const replyData = { ticket_id: req.params.id, sender_username, message: message || null, image_url };
   wss.clients.forEach(client => {
-    if (client.readyState === 1) client.send(JSON.stringify({ type: "TICKET_REPLY", data: { ticket_id: req.params.id, sender_username, message } }));
+    if (client.readyState === 1) client.send(JSON.stringify({ type: "TICKET_REPLY", data: replyData }));
   });
 
-  res.status(201).json({ success: true });
+  res.status(201).json({ success: true, image_url });
 });
 
 app.patch("/api/tickets/:id", (req, res) => {
@@ -674,6 +706,63 @@ app.delete("/api/settings/payment-account", (req, res) => {
   db.prepare("DELETE FROM settings WHERE key = 'payment_account'").run();
   const admin_user = req.headers["x-admin-user"] as string;
   if (admin_user) logAction(admin_user, "Removed payment account settings");
+  res.json({ success: true });
+});
+
+app.post("/api/shipments/:id/payment-proof", upload.single("proof"), (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: "Username is required" });
+
+  const shipment = db.prepare("SELECT * FROM shipments WHERE id = ?").get(req.params.id) as any;
+  if (!shipment) return res.status(404).json({ error: "Shipment not found" });
+
+  const proof_url = req.file ? (req.file as any).path || `/uploads/${req.file.filename}` : null;
+  if (!proof_url) return res.status(400).json({ error: "Proof file is required" });
+
+  db.prepare("UPDATE shipments SET payment_proof_url = ?, payment_confirmed = 0 WHERE id = ?").run(proof_url, req.params.id);
+
+  logAction(username, `Uploaded payment proof for shipment ${req.params.id}`);
+
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(JSON.stringify({ type: "SHIPMENT_UPDATE", data: { id: req.params.id, action: "PAYMENT_PROOF" } }));
+  });
+
+  res.json({ success: true, proof_url });
+});
+
+app.patch("/api/shipments/:id/confirm-payment", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+
+  const shipment = db.prepare("SELECT * FROM shipments WHERE id = ?").get(req.params.id) as any;
+  if (!shipment) return res.status(404).json({ error: "Shipment not found" });
+
+  db.prepare("UPDATE shipments SET payment_confirmed = 1 WHERE id = ?").run(req.params.id);
+
+  const admin_user = req.headers["x-admin-user"] as string || req.body?.admin_user;
+  if (admin_user) logAction(admin_user, `Confirmed payment for shipment ${req.params.id}`);
+
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(JSON.stringify({ type: "SHIPMENT_UPDATE", data: { id: req.params.id, action: "PAYMENT_CONFIRMED" } }));
+  });
+
+  res.json({ success: true });
+});
+
+app.patch("/api/shipments/:id/reject-payment", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+
+  const shipment = db.prepare("SELECT * FROM shipments WHERE id = ?").get(req.params.id) as any;
+  if (!shipment) return res.status(404).json({ error: "Shipment not found" });
+
+  db.prepare("UPDATE shipments SET payment_proof_url = NULL, payment_confirmed = 0 WHERE id = ?").run(req.params.id);
+
+  const admin_user = req.headers["x-admin-user"] as string || req.body?.admin_user;
+  if (admin_user) logAction(admin_user, `Rejected payment proof for shipment ${req.params.id}`);
+
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) client.send(JSON.stringify({ type: "SHIPMENT_UPDATE", data: { id: req.params.id, action: "PAYMENT_REJECTED" } }));
+  });
+
   res.json({ success: true });
 });
 

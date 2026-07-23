@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { User as UserIcon, Package, FileText, LogOut, ChevronRight, MapPin, Download, Plane } from "lucide-react";
+import { User as UserIcon, Package, FileText, LogOut, ChevronRight, MapPin, Download, Plane, ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { User, Shipment } from "../types";
 
@@ -158,6 +158,17 @@ export const ClientDashboard = ({ user, onLogout, setActiveTab }: ClientDashboar
                           }`}>
                             {shipment.status}
                           </span>
+                          {shipment.status === "Customs" && (
+                            <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest ${
+                              shipment.payment_confirmed ? "bg-emerald-100 text-emerald-600" :
+                              shipment.payment_proof_url ? "bg-amber-100 text-amber-600" :
+                              "bg-red-100 text-red-600"
+                            }`}>
+                              {shipment.payment_confirmed ? "Payment Confirmed" :
+                               shipment.payment_proof_url ? "Proof Uploaded" :
+                               "Payment Required"}
+                            </span>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>

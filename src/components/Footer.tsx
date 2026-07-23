@@ -1,5 +1,5 @@
 import React from "react";
-import { Facebook, Twitter, Linkedin, Instagram, Mail, Phone, MapPin } from "lucide-react";
+import { Facebook, Twitter, Linkedin, Instagram, Mail, MapPin } from "lucide-react";
 import { Logo } from "./Logo";
 
 export const Footer = () => {
@@ -51,10 +51,6 @@ export const Footer = () => {
             <li className="flex items-center gap-3">
               <Mail size={18} className="text-brand-secondary" />
               <span>DiplomaticXpressInfo@gmail.com</span>
-            </li>
-            <li className="flex items-center gap-3">
-              <Phone size={18} className="text-brand-secondary" />
-              <span>+1 (236) 952 3031</span>
             </li>
             <li className="flex items-center gap-3">
               <MapPin size={18} className="text-brand-secondary" />

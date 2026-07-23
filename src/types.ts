@@ -16,6 +16,10 @@ export interface Shipment {
   estimated_delivery?: string;
   shipping_cost?: string;
   content_description?: string;
+  customs_amount?: string;
+  customs_currency?: string;
+  payment_proof_url?: string;
+  payment_confirmed?: number;
 }
 
 export interface ShipmentUpdate {

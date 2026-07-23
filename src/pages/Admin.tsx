@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, Truck, MessageSquare, X, Camera, LogOut, History, User as UserIcon, FileText, Download, Printer, ShieldCheck, MapPin, ChevronRight, Plane, Plus, Trash2, QrCode, AlertCircle, Check, Settings } from "lucide-react";
+import { Package, Truck, MessageSquare, X, Camera, LogOut, History, User as UserIcon, FileText, Download, Printer, ShieldCheck, MapPin, ChevronRight, Plane, Plus, Trash2, QrCode, AlertCircle, Check, Settings, Image } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Shipment, Ticket, User } from "../types";
 
@@ -36,6 +36,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
   }, [selectedTicket]);
   const [replies, setReplies] = useState<any[]>([]);
   const [newReply, setNewReply] = useState("");
+  const [replyImage, setReplyImage] = useState<File | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [showUsers, setShowUsers] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -85,7 +86,9 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
     status: "Warehouse", 
     location: "", 
     notes: "",
-    paymentMethods: [] as { name: string, details: string }[]
+    paymentMethods: [] as { name: string, details: string }[],
+    customsAmount: "",
+    customsCurrency: "USD"
   });
   const [newUpdatePaymentMethod, setNewUpdatePaymentMethod] = useState({ name: "", details: "" });
   const [flightUpdateData, setFlightUpdateData] = useState({ status: "Scheduled", location: "", notes: "" });
@@ -439,6 +442,12 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
       if (updateData.paymentMethods.length > 0) {
         formData.append("payment_methods", JSON.stringify(updateData.paymentMethods));
       }
+      if (updateData.customsAmount) {
+        formData.append("customs_amount", updateData.customsAmount);
+      }
+      if (updateData.customsCurrency) {
+        formData.append("customs_currency", updateData.customsCurrency);
+      }
       if (photo) formData.append("photo", photo);
 
       const res = await fetch(`/api/shipments/${selectedShipment.id}/updates`, {
@@ -449,7 +458,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
 
       await handleResponse(res, "Update status");
       setSelectedShipment(null);
-      setUpdateData({ status: "Warehouse", location: "", notes: "", paymentMethods: [] });
+      setUpdateData({ status: "Warehouse", location: "", notes: "", paymentMethods: [], customsAmount: "", customsCurrency: "USD" });
       setPhoto(null);
       fetchShipments();
       fetchLogs();
@@ -540,16 +549,21 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
 
   const handleReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTicket || !newReply) return;
+    if (!selectedTicket || (!newReply && !replyImage)) return;
     try {
+      const formData = new FormData();
+      formData.append("sender_username", user.username);
+      if (newReply) formData.append("message", newReply);
+      if (replyImage) formData.append("image", replyImage);
+
       const res = await fetch(`/api/tickets/${selectedTicket.id}/replies`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sender_username: user.username, message: newReply }),
+        body: formData,
       });
       
       await handleResponse(res, "Reply to ticket");
       setNewReply("");
+      setReplyImage(null);
       fetchReplies(selectedTicket.id);
     } catch (err: any) {
       console.error("Reply error:", err);
@@ -772,12 +786,53 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                           <td className="py-5 font-mono font-black text-brand-secondary">{s.id}</td>
                           <td className="py-5 font-medium">{s.customer_name}</td>
                           <td className="py-5 text-slate-500">{s.destination}</td>
-                          <td className="py-5">
+                           <td className="py-5">
                             <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
                               s.status === "Delivered" ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"
                             }`}>
                               {s.status}
                             </span>
+                            {s.status === "Customs" && (
+                              <div className="mt-2">
+                                {s.payment_proof_url && !s.payment_confirmed ? (
+                                  <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">Proof Uploaded</span>
+                                    <div className="flex gap-1 mt-1">
+                                      <button
+                                        onClick={async () => {
+                                          if (!window.confirm("Confirm payment for this shipment?")) return;
+                                          const res = await fetch(`/api/shipments/${s.id}/confirm-payment`, {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json", "x-admin-secret": adminSecret.trim(), "x-admin-user": user.username }
+                                          });
+                                          if (res.ok) { fetchShipments(); fetchLogs(); }
+                                        }}
+                                        className="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100"
+                                      >
+                                        Confirm
+                                      </button>
+                                      <button
+                                        onClick={async () => {
+                                          if (!window.confirm("Reject this payment proof?")) return;
+                                          const res = await fetch(`/api/shipments/${s.id}/reject-payment`, {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json", "x-admin-secret": adminSecret.trim(), "x-admin-user": user.username }
+                                          });
+                                          if (res.ok) { fetchShipments(); fetchLogs(); }
+                                        }}
+                                        className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-100"
+                                      >
+                                        Reject
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : s.payment_confirmed ? (
+                                  <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">Payment Confirmed</span>
+                                ) : s.customs_amount ? (
+                                  <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">Awaiting Proof</span>
+                                ) : null}
+                              </div>
+                            )}
                           </td>
                           <td className="py-5">
                             {s.claimed_by ? (
@@ -842,7 +897,9 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                                     status: s.status,
                                     location: "",
                                     notes: "",
-                                    paymentMethods: s.payment_methods ? JSON.parse(s.payment_methods) : []
+                                    paymentMethods: s.payment_methods ? JSON.parse(s.payment_methods) : [],
+                                    customsAmount: s.customs_amount || "",
+                                    customsCurrency: s.customs_currency || "USD"
                                   });
                                 }}
                                 className="text-brand-secondary font-bold text-sm hover:underline"
@@ -876,7 +933,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {tickets.map((t) => (
-                  <div key={t.id} onClick={() => { setSelectedTicket(t); fetchReplies(t.id); }} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 hover:border-brand-secondary transition-all cursor-pointer group hover:shadow-lg hover:shadow-brand-secondary/5">
+                  <div key={t.id} onClick={() => { setSelectedTicket(t); setReplyImage(null); fetchReplies(t.id); }} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 hover:border-brand-secondary transition-all cursor-pointer group hover:shadow-lg hover:shadow-brand-secondary/5">
                     <div className="flex justify-between items-start mb-4">
                       <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md border ${
                         t.status === 'Open' ? 'bg-brand-secondary text-white border-brand-secondary' : 'bg-white text-slate-400 border-slate-100'
@@ -2163,7 +2220,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
             >
               <div className="flex justify-between items-center mb-8">
                 <h3 className="text-2xl font-black text-brand-primary tracking-tight">Ticket: {selectedTicket.subject}</h3>
-                <button onClick={() => setSelectedTicket(null)} className="text-slate-400 hover:text-brand-primary"><X size={28} /></button>
+                <button onClick={() => { setSelectedTicket(null); setReplyImage(null); }} className="text-slate-400 hover:text-brand-primary"><X size={28} /></button>
               </div>
               <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 mb-6">
                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
@@ -2177,15 +2234,40 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                         <span className="text-[10px] font-black text-brand-secondary uppercase">{r.sender_username}</span>
                         <span className="text-[10px] text-slate-400">{new Date(r.timestamp).toLocaleString()}</span>
                       </div>
-                      <p className="text-sm text-slate-600">{r.message}</p>
+                      {r.message && <p className="text-sm text-slate-600">{r.message}</p>}
+                      {r.image_url && (
+                        <div className="mt-3">
+                          <img
+                            src={r.image_url}
+                            alt="Attached"
+                            className="rounded-xl border border-slate-200 max-w-full max-h-64 object-contain shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                            referrerPolicy="no-referrer"
+                            crossOrigin="anonymous"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
-              <form onSubmit={handleReply} className="flex gap-4">
-                <input className="input flex-1" placeholder="Type your reply..." value={newReply} onChange={(e) => setNewReply(e.target.value)} />
-                <button type="submit" className="btn-primary px-8">Reply</button>
-              </form>
+              <div className="space-y-3">
+                {replyImage && (
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <Image size={16} className="text-brand-secondary shrink-0" />
+                    <span className="text-xs font-bold text-slate-500 truncate flex-1">{replyImage.name}</span>
+                    <button type="button" onClick={() => setReplyImage(null)} className="text-red-400 hover:text-red-600 text-xs font-bold">Remove</button>
+                  </div>
+                )}
+                <form onSubmit={handleReply} className="flex gap-4 items-center">
+                  <label className="shrink-0 p-3 rounded-xl bg-slate-100 text-slate-400 hover:bg-brand-secondary/10 hover:text-brand-secondary cursor-pointer transition-all">
+                    <Image size={20} />
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => setReplyImage(e.target.files?.[0] || null)} />
+                  </label>
+                  <input className="input flex-1" placeholder="Type your reply..." value={newReply} onChange={(e) => setNewReply(e.target.value)} />
+                  <button type="submit" disabled={!newReply && !replyImage} className="btn-primary px-8 disabled:opacity-50">Reply</button>
+                </form>
+              </div>
             </motion.div>
           </div>
         )}
@@ -2495,7 +2577,36 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                   <div className="space-y-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <h4 className="text-sm font-black text-brand-primary flex items-center gap-2">
                       <ShieldCheck size={18} className="text-brand-secondary" />
-                      Payment Methods for Customs
+                      Customs Payment Details
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2 space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Amount</label>
+                        <input 
+                          className="input py-2 text-xs" 
+                          type="number"
+                          step="0.01"
+                          placeholder="e.g. 1500.00" 
+                          value={updateData.customsAmount}
+                          onChange={(e) => setUpdateData({...updateData, customsAmount: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Currency</label>
+                        <select 
+                          className="input py-2 text-xs" 
+                          value={updateData.customsCurrency}
+                          onChange={(e) => setUpdateData({...updateData, customsCurrency: e.target.value})}
+                        >
+                          {["USD", "EUR", "GBP", "NGN", "CAD", "AUD", "JPY", "CNY", "ZAR", "GHS", "KES", "INR"].map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <h4 className="text-sm font-black text-brand-primary flex items-center gap-2 mt-2">
+                      <ShieldCheck size={18} className="text-brand-secondary" />
+                      Payment Methods
                     </h4>
                     <div className="grid grid-cols-2 gap-2">
                       <input 
