@@ -39,6 +39,7 @@ app.use("/uploads", express.static(uploadDir));
 
 // Database setup - SQLite
 const db = new Database("database.sqlite");
+db.pragma("foreign_keys = OFF");
 
 // Initialize tables
 db.exec(`
@@ -139,8 +140,7 @@ db.exec(`
     price REAL,
     duration_minutes INTEGER,
     distance_km INTEGER,
-    booking_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(flight_id) REFERENCES flights(id)
+    booking_date DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS activity_logs (
@@ -629,12 +629,19 @@ app.post("/api/flights/:id/book", (req, res) => {
     db.prepare("UPDATE flights SET available_seats = available_seats - 1 WHERE id = ?").run(req.params.id);
   }
 
-  db.prepare("INSERT INTO bookings (flight_id, user_id, passenger_name, passport_number, cabin_class, payment_status, airline, flight_number, origin, destination, departure_time, arrival_time, price, duration_minutes, distance_km) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-    req.params.id, user_id, passenger_name, passport_number || null, cabin_class || "economy",
-    airline || null, flight_number || null, origin || null, destination || null,
-    departure_time || null, arrival_time || null, price || 0, duration_minutes || 0, distance_km || 0
-  );
-  res.status(201).json({ success: true });
+  const flightIdForDb = flight ? req.params.id : null;
+
+  try {
+    db.prepare("INSERT INTO bookings (flight_id, user_id, passenger_name, passport_number, cabin_class, payment_status, airline, flight_number, origin, destination, departure_time, arrival_time, price, duration_minutes, distance_km) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+      flightIdForDb, user_id, passenger_name, passport_number || null, cabin_class || "economy",
+      airline || null, flight_number || null, origin || null, destination || null,
+      departure_time || null, arrival_time || null, price || 0, duration_minutes || 0, distance_km || 0
+    );
+    res.status(201).json({ success: true });
+  } catch (err: any) {
+    console.error("Book flight error:", err);
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.get("/api/my-bookings/:userId", (req, res) => {
