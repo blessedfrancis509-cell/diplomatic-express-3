@@ -156,6 +156,17 @@ db.exec(`
     value TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS news (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    summary TEXT,
+    content TEXT NOT NULL,
+    image_url TEXT,
+    category TEXT DEFAULT 'General',
+    is_published INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // Migrate shipments table: add customs payment columns if missing
@@ -556,15 +567,15 @@ app.get("/api/tickets/:id/replies", (req, res) => {
 app.post("/api/tickets/:id/replies", upload.single("image"), (req, res) => {
   const { sender_username, message } = req.body;
   const image_url = req.file ? (req.file as any).path || `/uploads/${req.file.filename}` : null;
-  db.prepare("INSERT INTO ticket_replies (ticket_id, sender_username, message, image_url) VALUES (?, ?, ?, ?)").run(req.params.id, sender_username, message || null, image_url);
+  const info = db.prepare("INSERT INTO ticket_replies (ticket_id, sender_username, message, image_url) VALUES (?, ?, ?, ?)").run(req.params.id, sender_username, message || null, image_url);
 
-  // Broadcast ticket reply via WebSocket
-  const replyData = { ticket_id: req.params.id, sender_username, message: message || null, image_url };
+  // Broadcast ticket reply via WebSocket with the inserted id for deduplication
+  const replyData = { id: info.lastInsertRowid, ticket_id: Number(req.params.id), sender_username, message: message || null, image_url };
   wss.clients.forEach(client => {
     if (client.readyState === 1) client.send(JSON.stringify({ type: "TICKET_REPLY", data: replyData }));
   });
 
-  res.status(201).json({ success: true, image_url });
+  res.status(201).json({ success: true, id: info.lastInsertRowid, image_url });
 });
 
 app.patch("/api/tickets/:id", (req, res) => {
@@ -795,6 +806,60 @@ app.post("/api/shipments/:id/claim", (req, res) => {
   // Log the action
   logAction("System", `Shipment ${req.params.id} claimed by ${username}`);
 
+  res.json({ success: true });
+});
+
+// News Routes
+app.get("/api/news", (req, res) => {
+  const { category } = req.query;
+  let sql = "SELECT * FROM news WHERE is_published = 1";
+  const params: any[] = [];
+  if (category && category !== "All") {
+    sql += " AND category = ?";
+    params.push(category);
+  }
+  sql += " ORDER BY created_at DESC";
+  res.json(db.prepare(sql).all(...params));
+});
+
+app.get("/api/news/all", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  res.json(db.prepare("SELECT * FROM news ORDER BY created_at DESC").all());
+});
+
+app.post("/api/news", upload.single("image"), (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  const { title, summary, content, category, is_published } = req.body;
+  if (!title || !content) return res.status(400).json({ error: "Title and content are required" });
+  const image_url = req.file ? (req.file as any).path || `/uploads/${req.file.filename}` : null;
+  const info = db.prepare("INSERT INTO news (title, summary, content, image_url, category, is_published) VALUES (?, ?, ?, ?, ?, ?)").run(
+    title, summary || null, content, image_url, category || "General", is_published !== undefined ? Number(is_published) : 1
+  );
+  const admin_user = req.headers["x-admin-user"] as string;
+  if (admin_user) logAction(admin_user, `Created news: ${title}`);
+  res.status(201).json({ id: info.lastInsertRowid });
+});
+
+app.put("/api/news/:id", upload.single("image"), (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  const { title, summary, content, category, is_published } = req.body;
+  const image_url = req.file ? (req.file as any).path || `/uploads/${req.file.filename}` : null;
+  let sql = "UPDATE news SET title = ?, summary = ?, content = ?, category = ?, is_published = ?";
+  const params: any[] = [title, summary || null, content, category || "General", is_published !== undefined ? Number(is_published) : 1];
+  if (image_url) { sql += ", image_url = ?"; params.push(image_url); }
+  sql += " WHERE id = ?";
+  params.push(req.params.id);
+  db.prepare(sql).run(...params);
+  const admin_user = req.headers["x-admin-user"] as string;
+  if (admin_user) logAction(admin_user, `Updated news #${req.params.id}`);
+  res.json({ success: true });
+});
+
+app.delete("/api/news/:id", (req, res) => {
+  if (!verifyAdmin(req)) return res.status(403).json({ error: "Unauthorized" });
+  db.prepare("DELETE FROM news WHERE id = ?").run(req.params.id);
+  const admin_user = req.headers["x-admin-user"] as string || req.query.admin_user as string;
+  if (admin_user) logAction(admin_user, `Deleted news #${req.params.id}`);
   res.json({ success: true });
 });
 

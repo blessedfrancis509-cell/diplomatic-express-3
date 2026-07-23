@@ -12,6 +12,7 @@ import { SupportChat } from "./components/SupportChat";
 import { Auth } from "./pages/Auth";
 import { ClientDashboard } from "./pages/ClientDashboard";
 import { Flights } from "./pages/Flights";
+import { News } from "./pages/News";
 
 import { User } from "./types";
 
@@ -64,6 +65,7 @@ export default function App() {
               {activeTab === "support" && <SupportPortal />}
               {activeTab === "flights" && <Flights user={user} setActiveTab={setActiveTab} />}
               {activeTab === "reviews" && <Reviews />}
+              {activeTab === "news" && <News />}
               {(activeTab === "dashboard" || activeTab === "auth") && (
                 user ? (
                   user.role === 'admin' ? (

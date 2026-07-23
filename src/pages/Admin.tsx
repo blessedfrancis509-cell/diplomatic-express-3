@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Package, Truck, MessageSquare, X, Camera, LogOut, History, User as UserIcon, FileText, Download, Printer, ShieldCheck, MapPin, ChevronRight, Plane, Plus, Trash2, QrCode, AlertCircle, Check, Settings, Image } from "lucide-react";
+import { Package, Truck, MessageSquare, X, Camera, LogOut, History, User as UserIcon, FileText, Download, Printer, ShieldCheck, MapPin, ChevronRight, Plane, Plus, Trash2, QrCode, AlertCircle, Check, Settings, Image, Newspaper } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Shipment, Ticket, User } from "../types";
+import { openReceiptWindow, downloadReceipt } from "../lib/receipt";
 
 interface AdminDashboardProps {
   user: User;
@@ -15,7 +16,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
   const [flights, setFlights] = useState<any[]>([]);
   const [adminBookings, setAdminBookings] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
-  const [activeAdminTab, setActiveAdminTab] = useState<"shipments" | "cs" | "flights" | "receipts" | "bookings">("shipments");
+  const [activeAdminTab, setActiveAdminTab] = useState<"shipments" | "cs" | "flights" | "receipts" | "bookings" | "news">("shipments");
   const [isAdding, setIsAdding] = useState(false);
   const [isAddingFlight, setIsAddingFlight] = useState(false);
   const [newFlight, setNewFlight] = useState({
@@ -95,6 +96,11 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
   const [photo, setPhoto] = useState<File | null>(null);
   const [newPaymentMethod, setNewPaymentMethod] = useState({ name: "", details: "" });
   const [copied, setCopied] = useState(false);
+  const [newsItems, setNewsItems] = useState<any[]>([]);
+  const [showNewsForm, setShowNewsForm] = useState(false);
+  const [editingNews, setEditingNews] = useState<any | null>(null);
+  const [newsForm, setNewsForm] = useState({ title: "", summary: "", content: "", category: "General", is_published: 1 });
+  const [newsImage, setNewsImage] = useState<File | null>(null);
 
   const calculateDaysOld = (dateStr: string) => {
     const created = new Date(dateStr);
@@ -125,6 +131,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
     fetchFlights();
     fetchAdminBookings();
     fetchPaymentAccount();
+    fetchNews();
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
@@ -289,6 +296,60 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
       if (res.ok) setPaymentAccount(await res.json());
     } catch (err) {
       console.error("Fetch payment account error:", err);
+    }
+  };
+
+  const fetchNews = async () => {
+    try {
+      const res = await fetch("/api/news/all", {
+        headers: { "x-admin-user": user.username, "x-admin-secret": adminSecret.trim() },
+      });
+      if (res.ok) setNewsItems(await res.json());
+    } catch (err) {
+      console.error("Fetch news error:", err);
+    }
+  };
+
+  const handleSaveNews = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const formData = new FormData();
+      formData.append("title", newsForm.title);
+      formData.append("summary", newsForm.summary);
+      formData.append("content", newsForm.content);
+      formData.append("category", newsForm.category);
+      formData.append("is_published", String(newsForm.is_published));
+      if (newsImage) formData.append("image", newsImage);
+
+      const isEdit = !!editingNews;
+      const url = isEdit ? `/api/news/${editingNews.id}` : "/api/news";
+      const res = await fetch(url, {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "x-admin-user": user.username, "x-admin-secret": adminSecret.trim() },
+        body: formData,
+      });
+      if (res.ok) {
+        setShowNewsForm(false);
+        setEditingNews(null);
+        setNewsForm({ title: "", summary: "", content: "", category: "General", is_published: 1 });
+        setNewsImage(null);
+        fetchNews();
+      }
+    } catch (err: any) {
+      alert("Failed to save news: " + err.message);
+    }
+  };
+
+  const handleDeleteNews = async (id: number) => {
+    if (!confirm("Delete this news article?")) return;
+    try {
+      const res = await fetch(`/api/news/${id}`, {
+        method: "DELETE",
+        headers: { "x-admin-user": user.username, "x-admin-secret": adminSecret.trim() },
+      });
+      if (res.ok) fetchNews();
+    } catch (err: any) {
+      alert("Failed to delete: " + err.message);
     }
   };
 
@@ -746,6 +807,13 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
           {adminBookings.some((b: any) => b.payment_status === "pending") && <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />}
           {activeAdminTab === "bookings" && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 w-full h-1 bg-brand-secondary rounded-full" />}
         </button>
+        <button 
+          onClick={() => { setActiveAdminTab("news"); fetchNews(); }}
+          className={`px-8 py-4 font-black uppercase tracking-widest text-sm transition-all relative flex items-center gap-2 ${activeAdminTab === "news" ? "text-brand-secondary" : "text-slate-400 hover:text-brand-primary"}`}
+        >
+          News
+          {activeAdminTab === "news" && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 w-full h-1 bg-brand-secondary rounded-full" />}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 gap-10">
@@ -1178,7 +1246,7 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                 </div>
               )}
 
-              <div className="overflow-x-auto">
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-slate-100 text-slate-400 text-xs uppercase tracking-widest">
@@ -1254,11 +1322,169 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                   </tbody>
                 </table>
               </div>
+
+              {adminBookings.length === 0 ? (
+                <div className="md:hidden text-center py-10 text-slate-400 font-bold">No bookings yet</div>
+              ) : (
+                <div className="md:hidden space-y-3">
+                  {adminBookings.map((booking: any) => (
+                    <div key={booking.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-brand-secondary text-sm">#{booking.id}</span>
+                          <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                            booking.cabin_class === "private_jet" ? "bg-purple-100 text-purple-700" :
+                            booking.cabin_class === "first_class" ? "bg-amber-100 text-amber-700" :
+                            "bg-blue-100 text-blue-700"
+                          }`}>
+                            {booking.cabin_class === "private_jet" ? "Private Jet" : booking.cabin_class === "first_class" ? "First Class" : "Economy"}
+                          </span>
+                        </div>
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                          booking.payment_status === "confirmed" ? "bg-emerald-100 text-emerald-600" :
+                          booking.payment_status === "rejected" ? "bg-red-100 text-red-600" :
+                          "bg-amber-100 text-amber-600"
+                        }`}>
+                          {booking.payment_status === "confirmed" ? "Confirmed" : booking.payment_status === "rejected" ? "Rejected" : "Pending"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-sm text-brand-primary">{booking.passenger_name}</p>
+                          <p className="text-xs text-slate-500">{booking.flight_number} &middot; {booking.origin} → {booking.destination}</p>
+                        </div>
+                        <p className="font-black text-brand-secondary">${booking.price?.toLocaleString()}</p>
+                      </div>
+                      {booking.payment_status === "pending" && (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleApproveBooking(booking.id)} className="flex-1 py-2 bg-emerald-500 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1">
+                            <Check size={12} /> Approve
+                          </button>
+                          <button onClick={() => handleRejectBooking(booking.id)} className="flex-1 py-2 bg-red-500 text-white text-xs font-bold rounded-lg flex items-center justify-center gap-1">
+                            <X size={12} /> Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+          </div>
+        )}
+
+        {activeAdminTab === "news" && (
+          <div className="card space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h3 className="text-xl md:text-2xl font-black text-brand-primary tracking-tight flex items-center gap-2">
+                <Newspaper size={24} className="text-brand-secondary" />
+                News Management
+              </h3>
+              <button
+                onClick={() => { setEditingNews(null); setNewsForm({ title: "", summary: "", content: "", category: "General", is_published: 1 }); setNewsImage(null); setShowNewsForm(true); }}
+                className="btn-primary py-2 px-4 text-sm flex items-center gap-2"
+              >
+                <Plus size={16} />
+                New Article
+              </button>
+            </div>
+
+            {newsItems.length === 0 ? (
+              <div className="text-center py-16 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                <Newspaper size={40} className="mx-auto text-slate-200 mb-3" />
+                <p className="text-slate-400 font-bold">No articles yet</p>
+                <p className="text-xs text-slate-300 mt-1">Create your first news article to share updates with users.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {newsItems.map((item: any) => (
+                  <div key={item.id} className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-brand-secondary/20 transition-all">
+                    {item.image_url && (
+                      <img src={item.image_url} alt="" className="w-20 h-20 rounded-xl object-cover shrink-0 border border-slate-200" referrerPolicy="no-referrer" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-brand-secondary bg-brand-secondary/10 px-2 py-0.5 rounded-full">{item.category}</span>
+                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${item.is_published ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"}`}>
+                          {item.is_published ? "Published" : "Draft"}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-brand-primary truncate">{item.title}</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{new Date(item.created_at).toLocaleDateString()}</p>
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => { setEditingNews(item); setNewsForm({ title: item.title, summary: item.summary || "", content: item.content, category: item.category, is_published: item.is_published }); setNewsImage(null); setShowNewsForm(true); }}
+                          className="text-[10px] font-bold text-brand-secondary hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button onClick={() => handleDeleteNews(item.id)} className="text-[10px] font-bold text-red-400 hover:text-red-600">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
+      <AnimatePresence>
+        {showNewsForm && (
+          <div className="fixed inset-0 bg-brand-primary/60 backdrop-blur-md flex items-end md:items-center justify-center z-[60] p-0 md:p-4" onClick={() => setShowNewsForm(false)}>
+            <motion.div
+              initial={{ opacity: 0, y: 50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 50 }}
+              className="bg-white w-full md:max-w-lg md:rounded-[2rem] rounded-t-[2rem] max-h-[90vh] flex flex-col shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center p-4 md:p-6 border-b border-slate-100 shrink-0">
+                <h3 className="text-lg font-black text-brand-primary">{editingNews ? "Edit Article" : "New Article"}</h3>
+                <button onClick={() => setShowNewsForm(false)} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200"><X size={20} className="text-slate-500" /></button>
+              </div>
+              <form onSubmit={handleSaveNews} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Title</label>
+                  <input className="input" required placeholder="Article title" value={newsForm.title} onChange={(e) => setNewsForm({ ...newsForm, title: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Category</label>
+                  <select className="input" value={newsForm.category} onChange={(e) => setNewsForm({ ...newsForm, category: e.target.value })}>
+                    {["Company News", "Industry Updates", "Logistics Tips", "Promotions", "General"].map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Summary</label>
+                  <input className="input" placeholder="Brief summary (optional)" value={newsForm.summary} onChange={(e) => setNewsForm({ ...newsForm, summary: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Content</label>
+                  <textarea className="input min-h-[160px]" required placeholder="Full article content..." value={newsForm.content} onChange={(e) => setNewsForm({ ...newsForm, content: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Cover Image</label>
+                  <input type="file" accept="image/*" onChange={(e) => setNewsImage(e.target.files?.[0] || null)} className="text-sm font-bold text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-brand-secondary/10 file:text-brand-secondary hover:file:bg-brand-secondary/20" />
+                  {editingNews?.image_url && !newsImage && <p className="text-[10px] text-slate-400">Current image will be kept if no new image selected.</p>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-black uppercase tracking-widest text-slate-400">Published</label>
+                  <button
+                    type="button"
+                    onClick={() => setNewsForm({ ...newsForm, is_published: newsForm.is_published ? 0 : 1 })}
+                    className={`w-12 h-6 rounded-full transition-all relative ${newsForm.is_published ? "bg-brand-secondary" : "bg-slate-200"}`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full shadow-md absolute top-0.5 transition-all ${newsForm.is_published ? "left-6" : "left-0.5"}`} />
+                  </button>
+                </div>
+                <button type="submit" className="btn-primary w-full py-4 text-lg">{editingNews ? "Update Article" : "Publish Article"}</button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {showReceiptGen && (
           <div 
@@ -1293,17 +1519,9 @@ export const AdminDashboard = ({ user, onLogout }: AdminDashboardProps) => {
                     <button onClick={() => {
                       const receiptEl = document.getElementById('printable-receipt');
                       if (!receiptEl) return;
-                      const receiptWindow = window.open('', '_blank');
-                      if (receiptWindow) {
-                        receiptWindow.document.write(`
-                          <html><head><title>Receipt</title>
-                          <style>
-                            @media print { body { padding: 0; margin: 0; } }
-                            body { font-family: Arial, sans-serif; padding: 20px; color: #1e3a8a; }
-                          </style></head><body>${receiptEl.innerHTML}<script>window.onload=function(){window.print();}</script></body></html>
-                        `);
-                        receiptWindow.document.close();
-                      }
+                      const html = `<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Receipt</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Inter',Arial,sans-serif;padding:16px;color:#1e3a8a;background:#f8fafc;}.receipt-wrap{max-width:700px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);}@media print{body{padding:0;background:#fff;}.receipt-wrap{box-shadow:none;border-radius:0;}}</style></head><body><div class="receipt-wrap">${receiptEl.innerHTML}</div><script>window.onload=function(){window.print();}</script></body></html>`;
+                      const opened = openReceiptWindow(html, "Receipt");
+                      if (!opened) downloadReceipt(html, "receipt.html");
                     }} className="btn-outline py-2 px-4 flex items-center gap-2">
                       <Download size={16} /> Download
                     </button>

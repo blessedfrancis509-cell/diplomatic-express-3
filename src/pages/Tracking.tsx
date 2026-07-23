@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Search, Clock, MapPin, CheckCircle2, AlertCircle, Download, Camera, PackageCheck, ShieldCheck, Plane, Calendar, Upload } from "lucide-react";
+import { Search, Clock, MapPin, CheckCircle2, AlertCircle, Download, Camera, PackageCheck, ShieldCheck, Plane, Calendar, Upload, FileText } from "lucide-react";
 import { motion } from "motion/react";
 import { Shipment, User } from "../types";
+import { generateReceiptHTML, openReceiptWindow, downloadReceipt } from "../lib/receipt";
 
 interface TrackingPortalProps {
   user: User | null;
@@ -168,7 +169,7 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
   };
 
   return (
-    <div className="py-20 max-w-5xl mx-auto px-6 space-y-16">
+    <div className="py-8 md:py-20 max-w-5xl mx-auto px-4 md:px-6 space-y-10 md:space-y-16">
       <div className="text-center space-y-4 md:space-y-6 max-w-2xl mx-auto">
         <h2 className="text-3xl md:text-5xl font-black text-brand-primary tracking-tight">Real-Time Tracking</h2>
         <p className="text-base md:text-lg text-slate-500">Track your packages or monitor flight status in one place.</p>
@@ -329,15 +330,15 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
                     const isActive = getFlightStatusStep(flight.status) >= i;
                     const isCurrent = getFlightStatusStep(flight.status) === i;
                     return (
-                      <div key={step} className="flex flex-col items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all duration-700 ${
+                      <div key={step} className="flex flex-col items-center gap-2 md:gap-4">
+                        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center border-2 transition-all duration-700 ${
                           isCurrent ? "bg-brand-secondary border-brand-secondary text-white shadow-xl shadow-brand-secondary/30 scale-125 z-10" :
                           isActive ? "bg-brand-secondary/10 border-brand-secondary text-brand-secondary" : "bg-white border-slate-100 text-slate-200"
                         }`}>
-                          {isActive ? <CheckCircle2 size={20} /> : <div className="w-1.5 h-1.5 bg-current rounded-full" />}
+                          {isActive ? <CheckCircle2 size={16} /> : <div className="w-1.5 h-1.5 bg-current rounded-full" />}
                         </div>
                         <div className="text-center">
-                          <span className={`text-[9px] font-black uppercase tracking-widest leading-tight block ${
+                          <span className={`text-[7px] md:text-[9px] font-black uppercase tracking-widest leading-tight block ${
                             isCurrent ? "text-brand-secondary underline underline-offset-4" :
                             isActive ? "text-brand-primary" : "text-slate-300"
                           }`}>{step}</span>
@@ -500,52 +501,67 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
                 </button>
               )}
               {shipment.status === "Delivered" && (
-                <button 
-                  onClick={() => {
-                    const receiptWindow = window.open('', '_blank');
-                    if (receiptWindow) {
-                      receiptWindow.document.write(`
-                        <html><head><title>Receipt - ${shipment.id}</title>
-                        <style>
-                          body{font-family:Arial,sans-serif;padding:40px;color:#1e3a8a;}
-                          .header{display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1e3a8a;padding-bottom:20px;margin-bottom:30px;}
-                          .title{font-size:24px;font-weight:900;text-transform:uppercase;}
-                          .subtitle{font-size:10px;color:#64748b;letter-spacing:0.2em;}
-                          .tracking{font-size:20px;font-family:monospace;color:#3b82f6;font-weight:900;}
-                          .section{margin:20px 0;padding:15px;background:#f8fafc;border-radius:8px;}
-                          .label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;}
-                          .value{font-size:14px;font-weight:700;color:#1e3a8a;margin-top:4px;}
-                          .grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;}
-                          .footer{margin-top:40px;padding-top:20px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center;}
-                          @media print{body{padding:20px;}}
-                        </style></head><body>
-                          <div class="header">
-                            <div><div class="title">Diplomatic Xpress Logistics</div><div class="subtitle">Official Consignment Receipt</div></div>
-                            <div><div class="label">Tracking Number</div><div class="tracking">${shipment.id}</div></div>
-                          </div>
-                          <div class="grid">
-                            <div class="section"><div class="label">Recipient</div><div class="value">${shipment.customer_name}</div></div>
-                            <div class="section"><div class="label">Phone</div><div class="value">${shipment.client_phone || 'N/A'}</div></div>
-                            <div class="section"><div class="label">Origin</div><div class="value">${shipment.origin}</div></div>
-                            <div class="section"><div class="label">Destination</div><div class="value">${shipment.destination}</div></div>
-                            <div class="section"><div class="label">Status</div><div class="value" style="color:#059669;">${shipment.status}</div></div>
-                            <div class="section"><div class="label">Date</div><div class="value">${new Date().toLocaleDateString()}</div></div>
-                            ${shipment.weight ? `<div class="section"><div class="label">Weight</div><div class="value">${shipment.weight} kg</div></div>` : ''}
-                            ${shipment.shipping_cost ? `<div class="section"><div class="label">Shipping Cost</div><div class="value">$${shipment.shipping_cost}</div></div>` : ''}
-                            ${shipment.content_description ? `<div class="section"><div class="label">Contents</div><div class="value">${shipment.content_description}</div></div>` : ''}
-                          </div>
-                          <div class="footer">© ${new Date().getFullYear()} Diplomatic Xpress Logistics. This receipt is digitally generated and valid without signature.</div>
-                          <script>window.onload=function(){window.print();}</script>
-                        </body></html>
-                      `);
-                      receiptWindow.document.close();
-                    }
-                  }}
-                  className="flex items-center justify-center gap-2 text-brand-secondary font-bold text-sm hover:underline bg-brand-secondary/5 px-4 py-2 rounded-xl border border-brand-secondary/10"
-                >
-                  <Download size={18} />
-                  Download Receipt
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      const html = generateReceiptHTML({
+                        type: "package",
+                        trackingId: shipment.id,
+                        deliveryDate: new Date().toLocaleDateString(),
+                        senderName: shipment.customer_name,
+                        senderAddress: shipment.origin,
+                        receiverName: shipment.customer_name,
+                        receiverEmail: "",
+                        receiverAddress: shipment.destination,
+                        origin: shipment.origin,
+                        destination: shipment.destination,
+                        content: shipment.content_description || "General Cargo",
+                        weight: shipment.weight || "",
+                        quantity: "1",
+                        action: "Delivered",
+                        paymentStatus: "PAID",
+                        estDelivery: shipment.estimated_delivery || "",
+                        shippingFee: shipment.shipping_cost ? `$${shipment.shipping_cost}` : "",
+                        ownerPhotoUrl: shipment.client_photo_url || "",
+                      });
+                      const opened = openReceiptWindow(html, `Receipt - ${shipment.id}`);
+                      if (!opened) downloadReceipt(html, `receipt-${shipment.id}.html`);
+                    }}
+                    className="flex items-center justify-center gap-2 text-brand-secondary font-bold text-sm hover:underline bg-brand-secondary/5 px-4 py-2 rounded-xl border border-brand-secondary/10"
+                  >
+                    <FileText size={18} />
+                    View Receipt
+                  </button>
+                  <button
+                    onClick={() => {
+                      const html = generateReceiptHTML({
+                        type: "package",
+                        trackingId: shipment.id,
+                        deliveryDate: new Date().toLocaleDateString(),
+                        senderName: shipment.customer_name,
+                        senderAddress: shipment.origin,
+                        receiverName: shipment.customer_name,
+                        receiverEmail: "",
+                        receiverAddress: shipment.destination,
+                        origin: shipment.origin,
+                        destination: shipment.destination,
+                        content: shipment.content_description || "General Cargo",
+                        weight: shipment.weight || "",
+                        quantity: "1",
+                        action: "Delivered",
+                        paymentStatus: "PAID",
+                        estDelivery: shipment.estimated_delivery || "",
+                        shippingFee: shipment.shipping_cost ? `$${shipment.shipping_cost}` : "",
+                        ownerPhotoUrl: shipment.client_photo_url || "",
+                      });
+                      downloadReceipt(html, `receipt-${shipment.id}.html`);
+                    }}
+                    className="flex items-center justify-center gap-2 text-emerald-600 font-bold text-sm bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100 hover:bg-emerald-100 transition-all"
+                  >
+                    <Download size={18} />
+                    Download
+                  </button>
+                </div>
               )}
               {shipment.status !== "Delivered" && (
                 <div className="flex items-center justify-center gap-2 text-slate-300 text-xs font-bold italic">
@@ -757,11 +773,11 @@ export const TrackingPortal = ({ user, setActiveTab }: TrackingPortalProps) => {
                   {["Pending", "Warehouse", "Shipping", "Courier 1", "Courier 2", "Courier 3", "In Transit", "Customs", "Out for Delivery", "Delivered"].map((step, i) => {
                     const isActive = getStatusStep(shipment.status) >= i;
                     return (
-                      <div key={step} className="flex flex-col items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border-4 transition-all duration-700 ${
+                      <div key={step} className="flex flex-col items-center gap-2 md:gap-4">
+                        <div className={`w-9 h-9 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center border-2 md:border-4 transition-all duration-700 ${
                           isActive ? "bg-brand-secondary border-brand-secondary text-white shadow-xl shadow-brand-secondary/30 scale-110" : "bg-white border-slate-100 text-slate-200"
                         }`}>
-                          {isActive ? <CheckCircle2 size={24} /> : <div className="w-2 h-2 bg-current rounded-full" />}
+                          {isActive ? <CheckCircle2 size={18} /> : <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-current rounded-full" />}
                         </div>
                         <span className={`text-[10px] font-black uppercase tracking-widest text-center max-w-[80px] leading-tight ${
                           isActive ? "text-brand-primary" : "text-slate-300"

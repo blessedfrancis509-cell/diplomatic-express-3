@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MessageSquare, CheckCircle2, Mail, Send, X, Image, Clock, ChevronRight, Plus } from "lucide-react";
+import { MessageSquare, CheckCircle2, Mail, Send, X, Image, Clock, ChevronRight, Plus, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Ticket } from "../types";
 
@@ -208,7 +208,7 @@ export const SupportPortal = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="space-y-3">
+        <div className={`space-y-3 ${selectedTicket ? "hidden lg:block" : ""}`}>
           <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest px-1">Your Tickets</h3>
           {tickets.length > 0 ? tickets.map((t) => (
             <div
@@ -237,11 +237,14 @@ export const SupportPortal = () => {
           )}
         </div>
 
-        <div className="lg:col-span-2">
+        <div className={`lg:col-span-2 ${!selectedTicket ? "hidden lg:block" : ""}`}>
           {selectedTicket ? (
             <div className="bg-white rounded-3xl border border-slate-200 shadow-lg flex flex-col h-[500px]">
               <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0">
-                <div className="min-w-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <button onClick={() => setSelectedTicket(null)} className="lg:hidden p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 transition-all shrink-0">
+                    <ArrowLeft size={16} className="text-slate-500" />
+                  </button>
                   <h3 className="font-bold text-brand-primary truncate">{selectedTicket.subject}</h3>
                   <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest ${getStatusColor(selectedTicket.status)}`}>
                     {selectedTicket.status}
