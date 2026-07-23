@@ -193,8 +193,11 @@ for (const [col, sql] of bookingMigrations) {
     db.prepare(sql).run();
   }
 }
-// Migrate old bookings with status 'Confirmed' to payment_status 'confirmed'
-db.prepare("UPDATE bookings SET payment_status = 'confirmed' WHERE status = 'Confirmed' AND payment_status = 'pending'").run();
+// Migrate old bookings with status 'Confirmed' to payment_status 'confirmed' (only if status column exists)
+const bookingColNames2 = (db.prepare("PRAGMA table_info(bookings)").all() as any[]).map((c: any) => c.name);
+if (bookingColNames2.includes("status")) {
+  db.prepare("UPDATE bookings SET payment_status = 'confirmed' WHERE status = 'Confirmed' AND payment_status = 'pending'").run();
+}
 
 // Migrate ticket_replies table: add image_url column if missing
 const replyCols = db.prepare("PRAGMA table_info(ticket_replies)").all() as any[];
